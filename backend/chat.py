@@ -6,7 +6,7 @@ import os
 load_dotenv()
 
 
-GEMINI_API_KEY = os.environ.get["GEMINI_API_KEY"]
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 
 # Main execution block
 if __name__ == "__main__":

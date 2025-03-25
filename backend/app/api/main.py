@@ -48,7 +48,7 @@ safety_settings = {
 }
 
 
-GEMINI_API_KEY = os.environ.get["GOOGLE_GEMINI_API_KEY"]
+GEMINI_API_KEY = os.environ.get("GOOGLE_GEMINI_API_KEY")
 BRAVE_API_KEY = os.environ.get("BRAVE_SEARCH_API_KEY")
 GOOGLE_SEARCH_API_KEY = os.environ.get("GOOGLE_SEARCH_API_KEY")
 TAVILY_SEARCH_API_KEY = os.environ.get("TAVILY_API_KEY")

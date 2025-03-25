@@ -1,22 +1,7 @@
-# Init the GoogleApiClient
-from pathlib import Path
+from langchain_community.document_loaders import YoutubeLoader
 
-from langchain_community.document_loaders import GoogleApiClient, GoogleApiYoutubeLoader
-
-google_api_client = GoogleApiClient(
-    credentials_path=Path(
-        "/Users/shubhang/Downloads/client_secret_171308141191-1dk6ptf6491sbqql66jsir5pqth2i613.apps.googleusercontent.com.json"
-    )
+loader = YoutubeLoader.from_youtube_url(
+    "https://www.youtube.com/watch?v=QsYGlZkevEg", add_video_info=False, language=["en"]
 )
-
-
-youtube_loader_video = GoogleApiYoutubeLoader(
-    google_api_client=google_api_client,
-    video_ids=[""],
-    add_video_info=True,
-    continue_on_failure=True,
-    captions_language="en",
-)
-
-x = youtube_loader_video.load()
+x = loader.load()
 print(x)

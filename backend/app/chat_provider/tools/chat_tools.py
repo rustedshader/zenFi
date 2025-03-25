@@ -27,9 +27,8 @@ from nselib.derivatives import (
 
 import yfinance as yf
 
-from pathlib import Path
 
-from langchain_community.document_loaders import GoogleApiClient, GoogleApiYoutubeLoader
+from langchain_community.document_loaders import YoutubeLoader
 
 
 class ChatTools:
@@ -40,42 +39,41 @@ class ChatTools:
         searxng: SearxSearchWrapper = None,
         brave_search: BraveSearch = None,
         youtube_search: YouTubeSearchTool = None,
-        youtube_captioner: GoogleApiYoutubeLoader = None,
     ):
         self.duckduckgo_general = duckduckgo_general
         self.duckduckgo_news = duckduckgo_news
         self.searxng = searxng
         self.brave_search = brave_search
         self.youtube_search = youtube_search
-        self.youtube_captioner = youtube_captioner
-        if not self.youtube_captioner:
-            google_api_client = GoogleApiClient(
-                credentials_path=Path(
-                    "/Users/shubhang/Downloads/client_secret_171308141191-1dk6ptf6491sbqql66jsir5pqth2i613.apps.googleusercontent.com.json"
-                )
-            )
-            self.youtube_captioner = GoogleApiYoutubeLoader(
-                google_api_client=google_api_client,
-                video_ids=[""],  # Will be set dynamically in get_youtube_captions
-                add_video_info=True,
-                continue_on_failure=True,
-                captions_language="en",
-            )
+        self.youtube_captioner = YouTubeSearchTool
 
     def get_youtube_captions(self, video_ids: list[str]):
         """Retrieve captions and video info for a list of YouTube video IDs."""
         if not self.youtube_captioner:
             return "YouTube captioner tool not initialized."
 
+        if not video_ids:
+            return "No video IDs provided."
+
         # Update video_ids in the youtube_captioner instance
         self.youtube_captioner.video_ids = video_ids
 
         try:
-            results = self.youtube_captioner.load()
+            results = []
+            for video_id in video_ids:
+                loader = YoutubeLoader.from_youtube_url(
+                    f"https://www.youtube.com/watch?v={video_id}",
+                    add_video_info=False,
+                    language=["en"],
+                )
+                video_data = loader.load()
+                if video_data:
+                    results.extend(video_data)
+
             if results:
-                # Format the results as a string (adjust based on actual output structure)
                 return "\n".join([str(result) for result in results])
             return "No captions or data found for the provided video IDs."
+
         except Exception as e:
             return f"Error retrieving YouTube captions: {str(e)}"
 
@@ -151,7 +149,7 @@ class ChatTools:
             if self.searxng:
                 searxng_results = self.searxng.run(query)
                 if isinstance(searxng_results, list):
-                    combined_results.extend(searxng_results[:max_results])
+                    combined_results.extend(searxng_results)
                 else:
                     combined_results.append(searxng_results)
         except Exception as e:
@@ -162,7 +160,7 @@ class ChatTools:
             if self.brave_search:
                 brave_results = self.brave_search.run(query)
                 if isinstance(brave_results, list):
-                    combined_results.extend(brave_results[:max_results])
+                    combined_results.extend(brave_results)
                 else:
                     combined_results.append(brave_results)
         except Exception as e:
@@ -173,7 +171,7 @@ class ChatTools:
             if self.duckduckgo_general:
                 ddg_results = self.search_duckduckgo(query)
                 if isinstance(ddg_results, list):
-                    combined_results.extend(ddg_results[:max_results])
+                    combined_results.extend(ddg_results)
                 else:
                     combined_results.append(ddg_results)
         except Exception as e:
