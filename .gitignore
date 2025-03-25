@@ -1,0 +1,8 @@
+.env
+.venv/
+node_modules/
+.DS_Store
+source_documents/
+test_documents/
+__pycache__/
+knowledge_base_db/
