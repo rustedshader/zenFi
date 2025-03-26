@@ -38,13 +38,16 @@ export function Chat({
     setInput('')
 
     try {
-      const response = await fetch('http://10.6.27.39:8000/chat/stream_http', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ message: messageContent })
-      })
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_BACKEND_API_URL}/chat/stream_http`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ message: messageContent })
+        }
+      )
 
       if (!response.ok) {
         throw new Error('Network response was not ok')
