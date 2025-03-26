@@ -1,24 +1,38 @@
-import { cn } from '@/lib/utils'
-import React from 'react'
-import HistoryContainer from './history-container'
-import { ModeToggle } from './mode-toggle'
-import { IconLogo } from './ui/icons'
+// frontend/components/header.tsx
+'use client'
 
-export const Header: React.FC = async () => {
+import { useRouter } from 'next/navigation'
+import { Button } from './ui/button'
+import { useAuth } from '@/contexts/auth-context'
+
+export default function Header() {
+  const router = useRouter()
+  const { isLoggedIn, logout } = useAuth()
+
+  const handleLogout = () => {
+    logout()
+    router.push('/login')
+  }
+
   return (
-    <header className="fixed w-full p-2 flex justify-between items-center z-10 backdrop-blur lg:backdrop-blur-none bg-background/80 lg:bg-transparent">
+    <header className="p-4 flex justify-between items-center">
+      <h1 className="text-xl font-bold">Morphic</h1>
       <div>
-        <a href="/">
-          <IconLogo className={cn('w-5 h-5')} />
-          <span className="sr-only">Morphic</span>
-        </a>
-      </div>
-      <div className="flex gap-0.5">
-        <ModeToggle />
-        <HistoryContainer />
+        {isLoggedIn ? (
+          <Button variant="ghost" onClick={handleLogout}>
+            Logout
+          </Button>
+        ) : (
+          <>
+            <Button variant="ghost" onClick={() => router.push('/login')}>
+              Login
+            </Button>
+            <Button variant="ghost" onClick={() => router.push('/register')}>
+              Register
+            </Button>
+          </>
+        )}
       </div>
     </header>
   )
 }
-
-export default Header

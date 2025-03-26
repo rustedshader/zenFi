@@ -113,30 +113,27 @@ export function ChatMessages({
           className="mb-4 flex flex-col gap-4"
         >
           <RenderMessage
-            message={{
-              ...message,
-              id: message.id || `message-${index}` // Ensure an id exists
-            }}
+            message={{ ...message, id: message.id || `message-${index}` }}
             messageId={message.id || `message-${index}`}
             getIsOpen={getIsOpen}
             onOpenChange={handleOpenChange}
             onQuerySelect={onQuerySelect}
             chatId={chatId}
           />
+          {message.sources && message.sources.length > 0 && (
+            <div className="mt-2 text-sm">
+              <span>Sources:</span>
+              <ul className="list-disc pl-4">
+                {message.sources.map((source, idx) => (
+                  <li key={idx}>{JSON.stringify(source)}</li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
       ))}
-      {showLoading &&
-        (lastToolData ? (
-          <ToolSection
-            key={manualToolCallId}
-            tool={lastToolData}
-            isOpen={getIsOpen(manualToolCallId)}
-            onOpenChange={open => handleOpenChange(manualToolCallId, open)}
-          />
-        ) : (
-          <Spinner />
-        ))}
-      <div ref={messagesEndRef} /> {/* Add empty div as scroll anchor */}
+      {showLoading && <Spinner />}
+      <div ref={messagesEndRef} />
     </div>
   )
 }

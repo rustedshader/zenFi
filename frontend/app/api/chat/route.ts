@@ -1,80 +1,52 @@
-import { createManualToolStreamResponse } from '@/lib/streaming/create-manual-tool-stream'
-import { createToolCallingStreamResponse } from '@/lib/streaming/create-tool-calling-stream'
-import { Model } from '@/lib/types/models'
-import { isProviderEnabled } from '@/lib/utils/registry'
 import { cookies } from 'next/headers'
+import { NextResponse } from 'next/server'
 
 export const maxDuration = 30
 
-const DEFAULT_MODEL: Model = {
-  id: 'gpt-4o-mini',
-  name: 'GPT-4o mini',
-  provider: 'OpenAI',
-  providerId: 'openai',
-  enabled: true,
-  toolCallType: 'native'
-}
-
 export async function POST(req: Request) {
   try {
-    const { messages, id: chatId } = await req.json()
-    const referer = req.headers.get('referer')
-    const isSharePage = referer?.includes('/share/')
-
-    if (isSharePage) {
-      return new Response('Chat API is not available on share pages', {
-        status: 403,
-        statusText: 'Forbidden'
-      })
-    }
-
+    const { message, sessionId } = await req.json()
     const cookieStore = await cookies()
-    const modelJson = cookieStore.get('selectedModel')?.value
-    const searchMode = cookieStore.get('search-mode')?.value === 'true'
+    const token = cookieStore.get('jwt_token')?.value
 
-    let selectedModel = DEFAULT_MODEL
+    if (!token) {
+      return new Response('Unauthorized', { status: 401 })
+    }
 
-    if (modelJson) {
-      try {
-        selectedModel = JSON.parse(modelJson) as Model
-      } catch (e) {
-        console.error('Failed to parse selected model:', e)
+    if (!sessionId) {
+      return new Response('Session ID required', { status: 400 })
+    }
+
+    const response = await fetch(
+      `${process.env.NEXT_PUBLIC_BACKEND_API_URL}/chat/stream_http`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          session_id: sessionId, // Match backend's expected key
+          message: message // Send message as a string
+        })
       }
+    )
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error('Backend error:', response.status, errorText)
+      throw new Error('Network response was not ok')
     }
 
-    if (
-      !isProviderEnabled(selectedModel.providerId) ||
-      selectedModel.enabled === false
-    ) {
-      return new Response(
-        `Selected provider is not enabled ${selectedModel.providerId}`,
-        {
-          status: 404,
-          statusText: 'Not Found'
-        }
-      )
-    }
-
-    const supportsToolCalling = selectedModel.toolCallType === 'native'
-
-    return supportsToolCalling
-      ? createToolCallingStreamResponse({
-          messages,
-          model: selectedModel,
-          chatId,
-          searchMode
-        })
-      : createManualToolStreamResponse({
-          messages,
-          model: selectedModel,
-          chatId,
-          searchMode
-        })
+    return new Response(response.body, {
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        Connection: 'keep-alive'
+      }
+    })
   } catch (error) {
     console.error('API route error:', error)
-    return new Response('Error processing your request', {
-      status: 500,
-      statusText: 'Internal Server Error'
-    })
+    return new Response('Error processing your request', { status: 500 })
   }
 }

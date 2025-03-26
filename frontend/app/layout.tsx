@@ -1,3 +1,4 @@
+// frontend/app/layout.tsx
 import Footer from '@/components/footer'
 import Header from '@/components/header'
 import { ThemeProvider } from '@/components/theme-provider'
@@ -6,6 +7,7 @@ import { cn } from '@/lib/utils'
 import type { Metadata, Viewport } from 'next'
 import { Inter as FontSans } from 'next/font/google'
 import './globals.css'
+import { AuthProvider } from '@/contexts/auth-context' // Import AuthProvider
 
 const fontSans = FontSans({
   subsets: ['latin'],
@@ -20,10 +22,7 @@ export const metadata: Metadata = {
   metadataBase: new URL('https://morphic.sh'),
   title,
   description,
-  openGraph: {
-    title,
-    description
-  },
+  openGraph: { title, description },
   twitter: {
     title,
     description,
@@ -53,10 +52,12 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <Header />
-          {children}
-          <Footer />
-          <Toaster />
+          <AuthProvider>
+            <Header />
+            {children}
+            <Footer />
+            <Toaster />
+          </AuthProvider>
         </ThemeProvider>
       </body>
     </html>
