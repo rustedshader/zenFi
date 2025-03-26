@@ -9,5 +9,5 @@ ENV APP_HOME /root
 WORKDIR $APP_HOME
 COPY /app $APP_HOME/app
 
-EXPOSE 80
-CMD ["uvicorn", "app.api.main:app", "--host", "0.0.0.0", "--port", "80"  ]
+EXPOSE 443
+CMD ["fastapi", "run", "app/api/main.py", "--host", "0.0.0.0", "--port", "443"]
