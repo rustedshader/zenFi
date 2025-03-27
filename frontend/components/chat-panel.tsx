@@ -12,7 +12,11 @@ interface Message {
   id?: string
   role: 'user' | 'assistant'
   content: string
-  sources?: any[]
+  sources?: Array<{
+    title: string
+    url: string
+    description?: string
+  }>
 }
 
 interface ChatPanelProps {
@@ -78,7 +82,7 @@ export function ChatPanel({
       })
       isFirstRender.current = false
     }
-  }, [query])
+  }, [query, append])
 
   return (
     <div className="fixed bottom-0 sm:bottom-4 left-0 sm:left-1/2 sm:-translate-x-1/2 w-full sm:w-full sm:max-w-4xl px-2 sm:px-4">

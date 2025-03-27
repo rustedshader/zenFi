@@ -1,3 +1,5 @@
+import Image from 'next/image'
+
 interface VideoResultProps {
   title: string
   url: string
@@ -29,10 +31,12 @@ export function VideoResult({
       <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
         {thumbnailUrl && (
           <div className="flex-shrink-0 w-full sm:w-48">
-            <img
+            <Image
               src={thumbnailUrl}
               alt={title}
-              className="w-full h-48 sm:h-27 rounded-lg object-cover"
+              width={192}
+              height={108}
+              className="w-full h-48 sm:h-28 rounded-lg object-cover"
               onError={e => {
                 const target = e.target as HTMLImageElement
                 target.src = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`

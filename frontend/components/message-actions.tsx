@@ -5,22 +5,14 @@ import { cn } from '@/lib/utils'
 import { useChat } from 'ai/react'
 import { Copy } from 'lucide-react'
 import { toast } from 'sonner'
-import { ChatShare } from './chat-share'
 import { Button } from './ui/button'
 
 interface MessageActionsProps {
   message: string
-  chatId?: string
-  enableShare?: boolean
   className?: string
 }
 
-export function MessageActions({
-  message,
-  chatId,
-  enableShare,
-  className
-}: MessageActionsProps) {
+export function MessageActions({ message, className }: MessageActionsProps) {
   const { isLoading } = useChat({
     id: CHAT_ID
   })
@@ -43,7 +35,6 @@ export function MessageActions({
       >
         <Copy size={14} />
       </Button>
-      {enableShare && chatId && <ChatShare chatId={chatId} />}
     </div>
   )
 }
