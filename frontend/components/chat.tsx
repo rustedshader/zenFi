@@ -48,30 +48,71 @@ export function Chat({
   }, [isLoggedIn, sessionId])
 
   const append = useCallback(
-    async (userMessage: string) => {
+    async (userMessage: Message) => {
       if (!sessionId) {
         toast.error('No active session')
         return
       }
 
       setIsLoading(true)
-      const message: Message = {
-        role: 'user' as const,
-        content: userMessage,
-        id: `user-${Date.now()}`
-      }
-      setMessages(prev => [...prev, message])
+      // Append the user message to the chat
+      setMessages(prev => [...prev, userMessage])
       setInput('')
 
       try {
         const response = await fetch('/api/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message: userMessage, sessionId })
+          body: JSON.stringify({ message: userMessage.content, sessionId })
         })
 
         if (!response.ok) throw new Error('Network response was not ok')
-        // Handle streaming response here...
+
+        const reader = response.body?.getReader()
+        if (reader) {
+          const decoder = new TextDecoder()
+          let assistantMessage: Message = {
+            role: 'assistant',
+            content: '',
+            id: `assistant-${Date.now()}`
+          }
+          setMessages(prev => [...prev, assistantMessage])
+
+          let buffer = ''
+          while (true) {
+            const { done, value } = await reader.read()
+            if (done) break
+
+            // Accumulate stream chunks in a buffer
+            buffer += decoder.decode(value, { stream: true })
+            // Split the buffer on newlines
+            const lines = buffer.split('\n')
+            // Save any incomplete line back to the buffer
+            buffer = lines.pop() || ''
+
+            // Process complete lines
+            for (const line of lines) {
+              if (line.trim().startsWith('data:')) {
+                const jsonStr = line.replace(/^data:\s*/, '')
+                try {
+                  const parsed = JSON.parse(jsonStr)
+                  // Only update if there's a content field
+                  if (parsed.content) {
+                    assistantMessage.content += parsed.content
+                    setMessages(prev => {
+                      const updated = [...prev]
+                      updated[updated.length - 1] = { ...assistantMessage }
+                      return updated
+                    })
+                  }
+                } catch (err) {
+                  console.error('Error parsing JSON:', err)
+                }
+              }
+            }
+          }
+        }
+        setIsLoading(false)
       } catch (error) {
         console.error('Error sending message:', error)
         toast.error('Error sending message')
@@ -85,19 +126,29 @@ export function Chat({
   const stop = () => setIsLoading(false)
 
   return (
-    <div className="relative flex h-[calc(100vh-8rem)] w-full flex-col overflow-hidden">
-      <ChatMessages
-        messages={messages}
-        isLoading={isLoading}
-        chatId={id}
-        onQuerySelect={() => {}}
-      />
+    <div className="flex flex-col h-[calc(100vh-8rem)]">
+      {/* Chat messages area becomes scrollable */}
+      <div className="flex-1 overflow-y-auto">
+        <ChatMessages
+          messages={messages}
+          isLoading={isLoading}
+          chatId={id}
+          onQuerySelect={() => {}}
+        />
+      </div>
+      {/* Chat input panel */}
       <ChatPanel
         input={input}
         handleInputChange={e => setInput(e.target.value)}
         handleSubmit={e => {
           e.preventDefault()
-          if (input.trim()) append(input)
+          if (input.trim()) {
+            append({
+              role: 'user',
+              content: input,
+              id: `user-${Date.now()}`
+            })
+          }
         }}
         isLoading={isLoading}
         messages={messages}
