@@ -1,7 +1,5 @@
-// frontend/components/chat-panel.tsx
 'use client'
 
-import { cn } from '@/lib/utils'
 import { ArrowUp, MessageCirclePlus, Square } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
@@ -10,6 +8,7 @@ import { EmptyScreen } from './empty-screen'
 import { SearchModeToggle } from './search-mode-toggle'
 import { Button } from './ui/button'
 import { IconLogo } from './ui/icons'
+import { toast } from 'sonner'
 
 interface Message {
   id?: string
@@ -57,12 +56,23 @@ export function ChatPanel({
     }, 300)
   }
 
-  const handleNewChat = () => {
-    setMessages([])
-    router.push('/')
+  // New Chat button now creates a new session and routes to /chat/[sessionId]
+  const handleNewChat = async () => {
+    try {
+      const response = await fetch('/api/sessions', { method: 'POST' })
+      if (response.ok) {
+        const data = await response.json()
+        setMessages([])
+        router.push(`/chat/${data.session_id}`)
+      } else {
+        toast.error('Failed to create new session')
+      }
+    } catch (error) {
+      toast.error('Error creating new session')
+    }
   }
 
-  // Submit query automatically on first render if provided
+  // Automatically submit query on first render if provided
   useEffect(() => {
     if (isFirstRender.current && query && query.trim().length > 0) {
       append({
@@ -76,14 +86,14 @@ export function ChatPanel({
   }, [query])
 
   return (
-    <div className="mx-auto w-full bg-background p-4">
+    <div className="mx-auto w-full bg-white dark:bg-gray-900 p-4">
       {messages.length === 0 ? (
         <div className="flex flex-col items-center justify-center">
           <div className="mb-8">
             <IconLogo className="size-12 text-muted-foreground" />
           </div>
           <form onSubmit={handleSubmit} className="max-w-3xl w-full px-6">
-            <div className="relative flex flex-col w-full gap-2 bg-muted rounded-3xl border border-input">
+            <div className="relative flex flex-col w-full gap-2 bg-gray-100 dark:bg-gray-800 rounded-3xl border border-gray-300 dark:border-gray-700">
               <Textarea
                 ref={inputRef}
                 name="input"
@@ -95,7 +105,7 @@ export function ChatPanel({
                 placeholder="Ask a question..."
                 spellCheck={false}
                 value={input}
-                className="resize-none w-full min-h-12 bg-transparent border-0 px-4 py-3 text-sm placeholder:text-muted-foreground focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                className="resize-none w-full min-h-12 bg-transparent border-0 px-4 py-3 text-sm placeholder:text-gray-500 dark:placeholder:text-gray-400 focus-visible:outline-none"
                 onChange={e => {
                   handleInputChange(e)
                   setShowEmptyScreen(e.target.value.length === 0)
@@ -154,7 +164,7 @@ export function ChatPanel({
           onSubmit={handleSubmit}
           className="max-w-3xl w-full mx-auto px-2 py-4"
         >
-          <div className="relative flex flex-col w-full gap-2 bg-muted rounded-3xl border border-input">
+          <div className="relative flex flex-col w-full gap-2 bg-gray-100 dark:bg-gray-800 rounded-3xl border border-gray-300 dark:border-gray-700">
             <Textarea
               ref={inputRef}
               name="input"
@@ -166,7 +176,7 @@ export function ChatPanel({
               placeholder="Ask a question..."
               spellCheck={false}
               value={input}
-              className="resize-none w-full min-h-12 bg-transparent border-0 px-4 py-3 text-sm placeholder:text-muted-foreground focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+              className="resize-none w-full min-h-12 bg-transparent border-0 px-4 py-3 text-sm placeholder:text-gray-500 dark:placeholder:text-gray-400 focus-visible:outline-none"
               onChange={e => {
                 handleInputChange(e)
               }}

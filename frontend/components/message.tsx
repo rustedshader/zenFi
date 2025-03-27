@@ -1,6 +1,3 @@
-'use client'
-
-import { cn } from '@/lib/utils'
 import 'katex/dist/katex.min.css'
 import rehypeExternalLinks from 'rehype-external-links'
 import rehypeKatex from 'rehype-katex'
@@ -21,77 +18,69 @@ export function BotMessage({
   const containsLaTeX = /\\\[([\s\S]*?)\\\]|\\\(([\s\S]*?)\\\)/.test(
     message || ''
   )
-
-  // Modify the content to render LaTeX equations if LaTeX patterns are found
+  // Preprocess LaTeX equations
   const processedData = preprocessLaTeX(message || '')
+  // Base container classes for the assistant message bubble
 
   if (containsLaTeX) {
     return (
-      <MemoizedReactMarkdown
-        rehypePlugins={[
-          [rehypeExternalLinks, { target: '_blank' }],
-          [rehypeKatex]
-        ]}
-        remarkPlugins={[remarkGfm, remarkMath]}
-        className={cn(
-          'prose-sm prose-neutral prose-a:text-accent-foreground/50',
-          className
-        )}
-      >
-        {processedData}
-      </MemoizedReactMarkdown>
+      <div>
+        <MemoizedReactMarkdown
+          rehypePlugins={[
+            [rehypeExternalLinks, { target: '_blank' }],
+            [rehypeKatex]
+          ]}
+          remarkPlugins={[remarkGfm, remarkMath]}
+          className="prose-sm prose-neutral prose-a:text-accent-foreground/50"
+        >
+          {processedData}
+        </MemoizedReactMarkdown>
+      </div>
     )
   }
 
   return (
-    <MemoizedReactMarkdown
-      rehypePlugins={[[rehypeExternalLinks, { target: '_blank' }]]}
-      remarkPlugins={[remarkGfm]}
-      className={cn(
-        'prose-sm prose-neutral prose-a:text-accent-foreground/50',
-        className
-      )}
-      components={{
-        code({ node, inline, className, children, ...props }) {
-          if (children.length) {
-            if (children[0] == '▍') {
+    <div>
+      <MemoizedReactMarkdown
+        rehypePlugins={[[rehypeExternalLinks, { target: '_blank' }]]}
+        remarkPlugins={[remarkGfm]}
+        className="prose-sm prose-neutral prose-a:text-accent-foreground/50"
+        components={{
+          code({ node, inline, className, children, ...props }) {
+            if (children.length) {
+              if (children[0] == '▍') {
+                return (
+                  <span className="mt-1 cursor-default animate-pulse">▍</span>
+                )
+              }
+              children[0] = (children[0] as string).replace('`▍`', '▍')
+            }
+            const match = /language-(\w+)/.exec(className || '')
+            if (inline) {
               return (
-                <span className="mt-1 cursor-default animate-pulse">▍</span>
+                <code className={className} {...props}>
+                  {children}
+                </code>
               )
             }
-
-            children[0] = (children[0] as string).replace('`▍`', '▍')
-          }
-
-          const match = /language-(\w+)/.exec(className || '')
-
-          if (inline) {
             return (
-              <code className={className} {...props}>
-                {children}
-              </code>
+              <CodeBlock
+                key={Math.random()}
+                language={(match && match[1]) || ''}
+                value={String(children).replace(/\n$/, '')}
+                {...props}
+              />
             )
-          }
-
-          return (
-            <CodeBlock
-              key={Math.random()}
-              language={(match && match[1]) || ''}
-              value={String(children).replace(/\n$/, '')}
-              {...props}
-            />
-          )
-        },
-        a: Citing
-      }}
-    >
-      {message}
-    </MemoizedReactMarkdown>
+          },
+          a: Citing
+        }}
+      >
+        {message}
+      </MemoizedReactMarkdown>
+    </div>
   )
 }
 
-// Preprocess LaTeX equations to be rendered by KaTeX
-// ref: https://github.com/remarkjs/react-markdown/issues/785
 const preprocessLaTeX = (content: string) => {
   const blockProcessedContent = content.replace(
     /\\\[([\s\S]*?)\\\]/g,
