@@ -32,23 +32,45 @@ export default function SessionsPage() {
   }, [])
 
   return (
-    <div className="p-4">
-      <h1 className="text-xl font-bold mb-4">Your Chat Sessions</h1>
+    <div className="p-4 max-w-4xl mx-auto">
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-2xl font-bold">Your Chat Sessions</h1>
+        <Button
+          onClick={() => router.push('/')}
+          className="bg-blue-500 hover:bg-blue-600 text-white"
+        >
+          New Chat
+        </Button>
+      </div>
       {sessions.length === 0 ? (
-        <p>No sessions found.</p>
+        <div className="text-center py-8">
+          <p className="text-gray-500 mb-4">No chat sessions found.</p>
+          <Button onClick={() => router.push('/chat')} variant="outline">
+            Start a New Chat
+          </Button>
+        </div>
       ) : (
-        <ul>
+        <div className="space-y-2">
           {sessions.map(session => (
-            <li key={session.session_id} className="mb-2">
+            <div
+              key={session.session_id}
+              className="p-4 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+            >
               <Button
-                variant="link"
+                variant="ghost"
+                className="w-full text-left justify-start"
                 onClick={() => router.push(`/chat/${session.session_id}`)}
               >
-                Session from {new Date(session.created_at).toLocaleString()}
+                <div className="flex flex-col items-start">
+                  <span className="font-medium">Chat Session</span>
+                  <span className="text-sm text-gray-500 dark:text-gray-400">
+                    {new Date(session.created_at).toLocaleString()}
+                  </span>
+                </div>
               </Button>
-            </li>
+            </div>
           ))}
-        </ul>
+        </div>
       )}
     </div>
   )

@@ -19,7 +19,7 @@ const description =
   'A finance AI that helps you manage your money, investments, and more.'
 
 export const metadata: Metadata = {
-  metadataBase: new URL('https://morphic.sh'),
+  metadataBase: new URL('https://financeai.sh'),
   title,
   description,
   openGraph: { title, description },

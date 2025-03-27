@@ -3,6 +3,7 @@ import json
 import uuid
 from datetime import datetime, timedelta
 from uuid import UUID as uuid_UUID
+import asyncio
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, Depends, HTTPException
@@ -248,22 +249,37 @@ class ChatServiceManager:
             tavily_tool=tavily_tool,
             brave_search=brave_search,
         )
+        # Add a semaphore to limit concurrent requests
+        self.semaphore = asyncio.Semaphore(5)  # Limit to 5 concurrent requests
 
     async def process_message(
         self, session_id: str, message: str, chat_history: list
     ) -> ChatResponse:
         try:
-            # Remove chat_history if the method does not accept it.
-            response = await self.chat_service.process_input(message)
-            return ChatResponse(message=response, sources=[])
+            async with self.semaphore:
+                response = await self.chat_service.process_input(message)
+                return ChatResponse(message=response, sources=[])
         except Exception as e:
             return ChatResponse(message=f"An error occurred: {str(e)}", sources=[])
 
     async def stream_message(
         self, session_id: str, message: str, chat_history: list
     ) -> AsyncGenerator[str, None]:
-        async for token in self.chat_service.stream_input(message):
-            yield token
+        try:
+            async with self.semaphore:
+                # Add rate limiting to prevent overwhelming the LLM
+                async for token in self.chat_service.stream_input(message):
+                    if token and token.strip():
+                        # Add a small delay between tokens to prevent overwhelming the client
+                        await asyncio.sleep(0.01)
+                        yield token
+        except asyncio.CancelledError:
+            # Handle cancellation gracefully
+            raise
+        except Exception as e:
+            # Log the error and yield an error message
+            print(f"Streaming error in ChatServiceManager: {str(e)}")
+            yield f"Error: {str(e)}"
 
 
 chat_service_manager = ChatServiceManager()
@@ -440,33 +456,107 @@ async def stream_chat(
 
     async def stream_generator():
         full_response = ""
+        sources = []
         try:
+            # Add a heartbeat to keep the connection alive
+            yield 'data: {"type":"heartbeat"}\n\n'
+            
             async for token in chat_service_manager.stream_message(
                 input_data.session_id, input_data.message, chat_history
             ):
                 if token and token.strip():
                     full_response += token
-                    yield f"data: {json.dumps({'content': token})}\n\n"
+                    # Add token type for better client handling
+                    yield f'data: {{"type":"token","content":{json.dumps(token)}}}\n\n'
+                    
+                    # Add a small delay to prevent overwhelming the client
+                    await asyncio.sleep(0.01)
+            
             # Save bot's full reply
             bot_message = ChatMessage(
                 session_id=session.id,
                 sender="bot",
                 message=full_response,
                 timestamp=datetime.utcnow(),
-                sources=[],
+                sources=sources,
             )
             db.add(bot_message)
             await db.commit()
-            yield 'data: {"finishReason":"stop"}\n\n'
+            
+            # Send completion message
+            yield 'data: {"type":"complete","finishReason":"stop"}\n\n'
+            
+        except asyncio.CancelledError:
+            # Handle client disconnection gracefully
+            yield 'data: {"type":"error","finishReason":"cancelled"}\n\n'
         except Exception as e:
-            yield f'data: {{"finishReason":"error","error":{json.dumps(str(e))}}}\n\n'
+            # Log the error for debugging
+            print(f"Streaming error: {str(e)}")
+            yield f'data: {{"type":"error","finishReason":"error","error":{json.dumps(str(e))}}}\n\n'
+        finally:
+            # Cleanup any resources if needed
+            pass
 
-    return StreamingResponse(stream_generator(), media_type="text/event-stream")
+    return StreamingResponse(
+        stream_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",  # Disable nginx buffering
+        }
+    )
 
 
 @app.get("/health")
 async def health_check():
     return {"status": "healthy"}
+
+
+@app.get("/chat/history")
+async def get_chat_history(
+    session_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        session_uuid = uuid_UUID(session_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid session id format")
+
+    # Verify session belongs to current user
+    stmt = select(ChatSession).where(
+        ChatSession.id == session_uuid, ChatSession.user_id == current_user.id
+    )
+    result = await db.execute(stmt)
+    session = result.scalars().first()
+    if not session:
+        raise HTTPException(
+            status_code=404, detail="Session not found or not authorized"
+        )
+
+    # Get all messages for this session
+    stmt = (
+        select(ChatMessage)
+        .where(ChatMessage.session_id == session_uuid)
+        .order_by(ChatMessage.timestamp)
+    )
+    result = await db.execute(stmt)
+    messages = result.scalars().all()
+
+    # Format messages for response
+    chat_history = [
+        {
+            "id": str(msg.id),
+            "role": "user" if msg.sender == "user" else "assistant",
+            "content": msg.message,
+            "timestamp": msg.timestamp.isoformat(),
+            "sources": msg.sources
+        }
+        for msg in messages
+    ]
+
+    return chat_history
 
 
 if __name__ == "__main__":

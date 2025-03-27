@@ -4,8 +4,6 @@ import { ArrowUp, MessageCirclePlus, Square } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
 import Textarea from 'react-textarea-autosize'
-import { EmptyScreen } from './empty-screen'
-import { SearchModeToggle } from './search-mode-toggle'
 import { Button } from './ui/button'
 import { IconLogo } from './ui/icons'
 import { toast } from 'sonner'
@@ -56,7 +54,6 @@ export function ChatPanel({
     }, 300)
   }
 
-  // New Chat button now creates a new session and routes to /chat/[sessionId]
   const handleNewChat = async () => {
     try {
       const response = await fetch('/api/sessions', { method: 'POST' })
@@ -72,7 +69,6 @@ export function ChatPanel({
     }
   }
 
-  // Automatically submit query on first render if provided
   useEffect(() => {
     if (isFirstRender.current && query && query.trim().length > 0) {
       append({
@@ -82,18 +78,17 @@ export function ChatPanel({
       })
       isFirstRender.current = false
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query])
 
   return (
-    <div className="mx-auto w-full bg-white dark:bg-gray-900 p-4">
+    <div className="fixed bottom-0 sm:bottom-4 left-0 sm:left-1/2 sm:-translate-x-1/2 w-full sm:w-full sm:max-w-4xl px-2 sm:px-4">
       {messages.length === 0 ? (
-        <div className="flex flex-col items-center justify-center">
+        <div className="flex flex-col items-center justify-center min-h-[60vh]">
           <div className="mb-8">
-            <IconLogo className="size-12 text-muted-foreground" />
+            <IconLogo className="size-12 sm:size-16 text-muted-foreground" />
           </div>
-          <form onSubmit={handleSubmit} className="max-w-3xl w-full px-6">
-            <div className="relative flex flex-col w-full gap-2 bg-gray-100 dark:bg-gray-800 rounded-3xl border border-gray-300 dark:border-gray-700">
+          <form onSubmit={handleSubmit} className="w-full max-w-2xl">
+            <div className="relative flex flex-col w-full gap-2 bg-white dark:bg-gray-800 rounded-t-2xl sm:rounded-2xl border border-gray-200 dark:border-gray-700 shadow-lg">
               <Textarea
                 ref={inputRef}
                 name="input"
@@ -105,7 +100,7 @@ export function ChatPanel({
                 placeholder="Ask a question..."
                 spellCheck={false}
                 value={input}
-                className="resize-none w-full min-h-12 bg-transparent border-0 px-4 py-3 text-sm placeholder:text-gray-500 dark:placeholder:text-gray-400 focus-visible:outline-none"
+                className="resize-none w-full min-h-[60px] bg-transparent border-0 px-4 py-3 text-base placeholder:text-gray-500 dark:placeholder:text-gray-400 focus-visible:outline-none"
                 onChange={e => {
                   handleInputChange(e)
                   setShowEmptyScreen(e.target.value.length === 0)
@@ -129,42 +124,28 @@ export function ChatPanel({
                 onFocus={() => setShowEmptyScreen(true)}
                 onBlur={() => setShowEmptyScreen(false)}
               />
-              <div className="flex items-center justify-between p-3">
-                <div className="flex items-center gap-2">
-                  <SearchModeToggle />
-                </div>
-                <div className="flex items-center gap-2">
-                  {messages.length > 0 && (
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={handleNewChat}
-                      type="button"
-                      disabled={isLoading}
-                    >
-                      <MessageCirclePlus className="size-4" />
-                    </Button>
+              <div className="flex items-center justify-end p-2 sm:p-3">
+                <Button
+                  type={isLoading ? 'button' : 'submit'}
+                  size="icon"
+                  variant="outline"
+                  disabled={input.length === 0 && !isLoading}
+                  onClick={isLoading ? stop : undefined}
+                  className="size-8 sm:size-10"
+                >
+                  {isLoading ? (
+                    <Square size={16} className="sm:size-20" />
+                  ) : (
+                    <ArrowUp size={16} className="sm:size-20" />
                   )}
-                  <Button
-                    type={isLoading ? 'button' : 'submit'}
-                    size="icon"
-                    variant="outline"
-                    disabled={input.length === 0 && !isLoading}
-                    onClick={isLoading ? stop : undefined}
-                  >
-                    {isLoading ? <Square size={20} /> : <ArrowUp size={20} />}
-                  </Button>
-                </div>
+                </Button>
               </div>
             </div>
           </form>
         </div>
       ) : (
-        <form
-          onSubmit={handleSubmit}
-          className="max-w-3xl w-full mx-auto px-2 py-4"
-        >
-          <div className="relative flex flex-col w-full gap-2 bg-gray-100 dark:bg-gray-800 rounded-3xl border border-gray-300 dark:border-gray-700">
+        <form onSubmit={handleSubmit} className="w-full">
+          <div className="relative flex flex-col w-full gap-2 bg-white dark:bg-gray-800 rounded-t-2xl sm:rounded-2xl border border-gray-200 dark:border-gray-700 shadow-lg">
             <Textarea
               ref={inputRef}
               name="input"
@@ -176,7 +157,7 @@ export function ChatPanel({
               placeholder="Ask a question..."
               spellCheck={false}
               value={input}
-              className="resize-none w-full min-h-12 bg-transparent border-0 px-4 py-3 text-sm placeholder:text-gray-500 dark:placeholder:text-gray-400 focus-visible:outline-none"
+              className="resize-none w-full min-h-[60px] bg-transparent border-0 px-4 py-3 text-base placeholder:text-gray-500 dark:placeholder:text-gray-400 focus-visible:outline-none"
               onChange={e => {
                 handleInputChange(e)
               }}
@@ -197,10 +178,7 @@ export function ChatPanel({
                 }
               }}
             />
-            <div className="flex items-center justify-between p-3">
-              <div className="flex items-center gap-2">
-                <SearchModeToggle />
-              </div>
+            <div className="flex items-center justify-between p-2 sm:p-3">
               <div className="flex items-center gap-2">
                 {messages.length > 0 && (
                   <Button
@@ -209,18 +187,26 @@ export function ChatPanel({
                     onClick={handleNewChat}
                     type="button"
                     disabled={isLoading}
+                    className="size-8 sm:size-10"
                   >
-                    <MessageCirclePlus className="size-4" />
+                    <MessageCirclePlus className="size-4 sm:size-5" />
                   </Button>
                 )}
+              </div>
+              <div className="flex items-center gap-2">
                 <Button
                   type={isLoading ? 'button' : 'submit'}
                   size="icon"
                   variant="outline"
                   disabled={input.length === 0 && !isLoading}
                   onClick={isLoading ? stop : undefined}
+                  className="size-8 sm:size-10"
                 >
-                  {isLoading ? <Square size={20} /> : <ArrowUp size={20} />}
+                  {isLoading ? (
+                    <Square size={16} className="sm:size-20" />
+                  ) : (
+                    <ArrowUp size={16} className="sm:size-20" />
+                  )}
                 </Button>
               </div>
             </div>

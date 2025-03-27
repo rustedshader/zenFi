@@ -5,12 +5,10 @@ interface UserMessageProps {
   message: string
 }
 
-export const UserMessage: React.FC<UserMessageProps> = ({ message }) => {
+export function UserMessage({ message }: UserMessageProps) {
   return (
-    <CollapsibleMessage role="user">
-      <div className="bg-blue-500 text-white p-3 rounded-lg inline-block max-w-full">
-        {message}
-      </div>
-    </CollapsibleMessage>
+    <div className="prose dark:prose-invert max-w-none">
+      <p className="text-base leading-relaxed whitespace-pre-wrap">{message}</p>
+    </div>
   )
 }

@@ -60,6 +60,26 @@ export function Chat({
     }
   }, [isLoggedIn, sessionId])
 
+  useEffect(() => {
+    async function fetchChatHistory() {
+      if (!sessionId) return
+
+      try {
+        const response = await fetch(`/api/chat/history?sessionId=${sessionId}`)
+        if (!response.ok) {
+          throw new Error('Failed to fetch chat history')
+        }
+        const history = await response.json()
+        setMessages(history)
+      } catch (error) {
+        console.error('Error fetching chat history:', error)
+        toast.error('Failed to load chat history')
+      }
+    }
+
+    fetchChatHistory()
+  }, [sessionId])
+
   const append = useCallback(
     async (userMessage: Message) => {
       if (!sessionId) {
@@ -76,7 +96,7 @@ export function Chat({
         const response = await fetch('/api/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          // Note: the API route translates "sessionId" into the backend’s expected "session_id" field.
+          // Note: the API route translates "sessionId" into the backend's expected "session_id" field.
           body: JSON.stringify({ message: userMessage.content, sessionId })
         })
 
@@ -135,8 +155,8 @@ export function Chat({
   const stop = () => setIsLoading(false)
 
   return (
-    <div className="flex flex-col h-[calc(100vh-8rem)]">
-      <div className="flex-1 overflow-y-auto">
+    <div className="flex flex-col h-[calc(100vh-4rem)]">
+      <div className="flex-1 overflow-y-auto pb-32">
         <ChatMessages
           messages={messages}
           isLoading={isLoading}
