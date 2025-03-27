@@ -1,4 +1,4 @@
-// frontend/app/api/sessions/route.ts
+// /frontend/app/api/sessions/route.ts
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 
@@ -22,9 +22,17 @@ export async function POST(req: Request) {
   )
 
   if (!response.ok) {
-    const error = await response.json()
+    let errorDetail: unknown
+    try {
+      const clonedResponse = response.clone()
+      const errorJson = await clonedResponse.json()
+      errorDetail = errorJson.detail || errorJson
+    } catch (e) {
+      const clonedResponse = response.clone()
+      errorDetail = await clonedResponse.text()
+    }
     return NextResponse.json(
-      { error: error.detail },
+      { error: errorDetail },
       { status: response.status }
     )
   }

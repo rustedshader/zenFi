@@ -1,4 +1,3 @@
-// frontend/components/chat.tsx
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
@@ -14,37 +13,51 @@ interface Message {
   sources?: any[]
 }
 
-export function Chat({
-  id,
-  savedMessages = [],
-  query
-}: {
+interface ChatProps {
   id: string
   savedMessages?: Message[]
   query?: string
-}) {
+  sessionId?: string
+}
+
+export function Chat({
+  id,
+  savedMessages = [],
+  query,
+  sessionId: initialSessionId
+}: ChatProps) {
   const [messages, setMessages] = useState<Message[]>(savedMessages)
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
-  const [sessionId, setSessionId] = useState<string | null>(null)
+  // Use provided sessionId if available; otherwise null so that we create a new session
+  const [sessionId, setSessionId] = useState<string | null>(
+    initialSessionId || null
+  )
   const { isLoggedIn } = useAuth()
 
   useEffect(() => {
-    const createSession = async () => {
-      const response = await fetch('/api/sessions', { method: 'POST' })
-      if (response.ok) {
-        const { session_id } = await response.json()
-        setSessionId(session_id)
-      } else {
-        console.error(
-          'Session creation failed:',
-          response.status,
-          await response.text()
-        )
-        toast.error('Failed to create session')
+    async function createSession() {
+      try {
+        const response = await fetch('/api/sessions', { method: 'POST' })
+        if (response.ok) {
+          const data = await response.json()
+          setSessionId(data.session_id)
+        } else {
+          console.error(
+            'Session creation failed:',
+            response.status,
+            await response.text()
+          )
+          toast.error('Failed to create session')
+        }
+      } catch (error) {
+        console.error(error)
+        toast.error('Error creating session')
       }
     }
-    if (isLoggedIn && !sessionId) createSession()
+    if (isLoggedIn && !sessionId) {
+      createSession()
+    }
   }, [isLoggedIn, sessionId])
 
   const append = useCallback(
@@ -55,7 +68,7 @@ export function Chat({
       }
 
       setIsLoading(true)
-      // Append the user message to the chat
+      // Append the user message
       setMessages(prev => [...prev, userMessage])
       setInput('')
 
@@ -63,6 +76,7 @@ export function Chat({
         const response = await fetch('/api/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          // Note: the API route translates "sessionId" into the backend’s expected "session_id" field.
           body: JSON.stringify({ message: userMessage.content, sessionId })
         })
 
@@ -83,20 +97,15 @@ export function Chat({
             const { done, value } = await reader.read()
             if (done) break
 
-            // Accumulate stream chunks in a buffer
             buffer += decoder.decode(value, { stream: true })
-            // Split the buffer on newlines
             const lines = buffer.split('\n')
-            // Save any incomplete line back to the buffer
             buffer = lines.pop() || ''
 
-            // Process complete lines
             for (const line of lines) {
               if (line.trim().startsWith('data:')) {
                 const jsonStr = line.replace(/^data:\s*/, '')
                 try {
                   const parsed = JSON.parse(jsonStr)
-                  // Only update if there's a content field
                   if (parsed.content) {
                     assistantMessage.content += parsed.content
                     setMessages(prev => {
@@ -127,7 +136,6 @@ export function Chat({
 
   return (
     <div className="flex flex-col h-[calc(100vh-8rem)]">
-      {/* Chat messages area becomes scrollable */}
       <div className="flex-1 overflow-y-auto">
         <ChatMessages
           messages={messages}
@@ -136,7 +144,6 @@ export function Chat({
           onQuerySelect={() => {}}
         />
       </div>
-      {/* Chat input panel */}
       <ChatPanel
         input={input}
         handleInputChange={e => setInput(e.target.value)}

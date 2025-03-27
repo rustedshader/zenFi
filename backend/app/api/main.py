@@ -1,29 +1,37 @@
-from langchain_google_community import GoogleSearchAPIWrapper
-from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
-from app.chat_provider.service.chat_service import ChatService
+import os
+import json
+import uuid
+from datetime import datetime, timedelta
+from uuid import UUID as uuid_UUID
+
+from dotenv import load_dotenv
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
+from fastapi.security import OAuth2PasswordBearer
+from jose import JWTError, jwt
 from pydantic import BaseModel
-from typing import AsyncGenerator
-import json
-from langchain_google_genai import HarmBlockThreshold, HarmCategory
-from langchain_community.tools.tavily_search import TavilySearchResults
-from langchain_community.tools import BraveSearch
-from dotenv import load_dotenv
-import os
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, JSON
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.future import select
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker, declarative_base
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, JSON
-from sqlalchemy.future import select
-from datetime import datetime
-from passlib.context import CryptContext
-from jose import JWTError, jwt
-from fastapi.security import OAuth2PasswordBearer
 import sqlalchemy
 import uvicorn
-from datetime import timedelta
+from passlib.context import CryptContext
+from typing import AsyncGenerator, List
 
+# Import LLM and tools (assuming these exist in your codebase)
+from langchain_google_community import GoogleSearchAPIWrapper
+from langchain_google_genai import (
+    ChatGoogleGenerativeAI,
+    GoogleGenerativeAIEmbeddings,
+    HarmBlockThreshold,
+    HarmCategory,
+)
+from langchain_community.tools.tavily_search import TavilySearchResults
+from langchain_community.tools import BraveSearch
+from app.chat_provider.service.chat_service import ChatService
 
 # Load environment variables
 load_dotenv()
@@ -44,9 +52,9 @@ app.add_middleware(
 # Database Connection
 def connect_tcp_socket() -> sqlalchemy.engine.base.Engine:
     """Initializes a TCP connection pool for a Cloud SQL instance of Postgres."""
-    db_host = os.environ.get("INSTANCE_HOST", "34.29.30.181")
+    db_host = os.environ.get("INSTANCE_HOST", "34.131.174.172")
     db_user = os.environ.get("DB_USER", "postgres")
-    db_pass = os.environ.get("DB_PASS", ":x~4n1uL\#CsQ}15")
+    db_pass = os.environ.get("DB_PASS", "AVgmUCBkYz,sM21}")
     db_name = os.environ.get("DB_NAME", "postgres")
     db_port = os.environ.get("DB_PORT", "5432")
 
@@ -73,8 +81,8 @@ engine = create_async_engine(
     sqlalchemy.engine.url.URL.create(
         drivername="postgresql+asyncpg",
         username=os.environ.get("DB_USER", "postgres"),
-        password=os.environ.get("DB_PASS", ":x~4n1uL\#CsQ}15"),
-        host=os.environ.get("INSTANCE_HOST", "34.29.30.181"),
+        password=os.environ.get("DB_PASS", "AVgmUCBkYz,sM21}"),
+        host=os.environ.get("INSTANCE_HOST", "34.131.174.172"),
         port=os.environ.get("DB_PORT", "5432"),
         database=os.environ.get("DB_NAME", "postgres"),
     ),
@@ -96,7 +104,7 @@ class User(Base):
 
 class ChatSession(Base):
     __tablename__ = "chat_sessions"
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
     user_id = Column(Integer, ForeignKey("users.id"))
     created_at = Column(DateTime, default=datetime.utcnow)
 
@@ -104,7 +112,7 @@ class ChatSession(Base):
 class ChatMessage(Base):
     __tablename__ = "chat_messages"
     id = Column(Integer, primary_key=True, index=True)
-    session_id = Column(Integer, ForeignKey("chat_sessions.id"))
+    session_id = Column(UUID(as_uuid=True), ForeignKey("chat_sessions.id"))
     sender = Column(String)
     message = Column(String)
     timestamp = Column(DateTime, default=datetime.utcnow)
@@ -187,13 +195,13 @@ class UserLogin(BaseModel):
 
 
 class ChatInput(BaseModel):
-    session_id: int
+    session_id: str  # now a UUID in string format
     message: str
 
 
 class ChatResponse(BaseModel):
     message: str
-    sources: list = []
+    sources: List = []
 
 
 # Safety Settings for LLM
@@ -205,7 +213,7 @@ safety_settings = {
     HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
 }
 
-# Environment Variables
+# Environment Variables for LLM and search tools
 GEMINI_API_KEY = os.environ.get("GOOGLE_GEMINI_API_KEY")
 BRAVE_API_KEY = os.environ.get("BRAVE_SEARCH_API_KEY")
 GOOGLE_SEARCH_API_KEY = os.environ.get("GOOGLE_SEARCH_API_KEY")
@@ -241,22 +249,28 @@ class ChatServiceManager:
             brave_search=brave_search,
         )
 
-    async def process_message(self, message: str) -> ChatResponse:
+    async def process_message(
+        self, session_id: str, message: str, chat_history: list
+    ) -> ChatResponse:
         try:
+            # Remove chat_history if the method does not accept it.
             response = await self.chat_service.process_input(message)
             return ChatResponse(message=response, sources=[])
         except Exception as e:
             return ChatResponse(message=f"An error occurred: {str(e)}", sources=[])
 
-    async def stream_message(self, message: str) -> AsyncGenerator[str, None]:
+    async def stream_message(
+        self, session_id: str, message: str, chat_history: list
+    ) -> AsyncGenerator[str, None]:
         async for token in self.chat_service.stream_input(message):
             yield token
 
 
 chat_service_manager = ChatServiceManager()
 
-
 # Endpoints
+
+
 @app.post("/register")
 async def register(user: UserCreate, db: AsyncSession = Depends(get_db)):
     stmt = select(User).where(
@@ -294,7 +308,21 @@ async def create_session(
     db.add(new_session)
     await db.commit()
     await db.refresh(new_session)
-    return {"session_id": new_session.id}
+    # Return the UUID as a string
+    return {"session_id": str(new_session.id)}
+
+
+@app.get("/sessions")
+async def list_sessions(
+    current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
+):
+    stmt = select(ChatSession).where(ChatSession.user_id == current_user.id)
+    result = await db.execute(stmt)
+    sessions = result.scalars().all()
+    return [
+        {"session_id": str(session.id), "created_at": session.created_at.isoformat()}
+        for session in sessions
+    ]
 
 
 @app.post("/chat")
@@ -303,8 +331,14 @@ async def send_message(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    # Convert session_id to UUID
+    try:
+        session_uuid = uuid_UUID(input_data.session_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid session id format")
+
     stmt = select(ChatSession).where(
-        ChatSession.id == input_data.session_id, ChatSession.user_id == current_user.id
+        ChatSession.id == session_uuid, ChatSession.user_id == current_user.id
     )
     result = await db.execute(stmt)
     session = result.scalars().first()
@@ -313,8 +347,9 @@ async def send_message(
             status_code=404, detail="Session not found or not authorized"
         )
 
+    # Save user's message
     user_message = ChatMessage(
-        session_id=input_data.session_id,
+        session_id=session.id,
         sender="user",
         message=input_data.message,
         timestamp=datetime.utcnow(),
@@ -322,9 +357,30 @@ async def send_message(
     db.add(user_message)
     await db.commit()
 
-    response = await chat_service_manager.process_message(input_data.message)
+    # Retrieve complete conversation history for context
+    stmt = (
+        select(ChatMessage)
+        .where(ChatMessage.session_id == session.id)
+        .order_by(ChatMessage.timestamp)
+    )
+    result = await db.execute(stmt)
+    chat_history = [
+        {
+            "sender": msg.sender,
+            "message": msg.message,
+            "timestamp": msg.timestamp.isoformat(),
+        }
+        for msg in result.scalars().all()
+    ]
+
+    # Process the message along with session history
+    response = await chat_service_manager.process_message(
+        input_data.session_id, input_data.message, chat_history
+    )
+
+    # Save bot's reply
     bot_message = ChatMessage(
-        session_id=input_data.session_id,
+        session_id=session.id,
         sender="bot",
         message=response.message,
         timestamp=datetime.utcnow(),
@@ -341,8 +397,13 @@ async def stream_chat(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    try:
+        session_uuid = uuid_UUID(input_data.session_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid session id format")
+
     stmt = select(ChatSession).where(
-        ChatSession.id == input_data.session_id, ChatSession.user_id == current_user.id
+        ChatSession.id == session_uuid, ChatSession.user_id == current_user.id
     )
     result = await db.execute(stmt)
     session = result.scalars().first()
@@ -351,8 +412,9 @@ async def stream_chat(
             status_code=404, detail="Session not found or not authorized"
         )
 
+    # Save user's message
     user_message = ChatMessage(
-        session_id=input_data.session_id,
+        session_id=session.id,
         sender="user",
         message=input_data.message,
         timestamp=datetime.utcnow(),
@@ -360,15 +422,34 @@ async def stream_chat(
     db.add(user_message)
     await db.commit()
 
+    # Retrieve conversation history for context
+    stmt = (
+        select(ChatMessage)
+        .where(ChatMessage.session_id == session.id)
+        .order_by(ChatMessage.timestamp)
+    )
+    result = await db.execute(stmt)
+    chat_history = [
+        {
+            "sender": msg.sender,
+            "message": msg.message,
+            "timestamp": msg.timestamp.isoformat(),
+        }
+        for msg in result.scalars().all()
+    ]
+
     async def stream_generator():
         full_response = ""
         try:
-            async for token in chat_service_manager.stream_message(input_data.message):
+            async for token in chat_service_manager.stream_message(
+                input_data.session_id, input_data.message, chat_history
+            ):
                 if token and token.strip():
                     full_response += token
                     yield f"data: {json.dumps({'content': token})}\n\n"
+            # Save bot's full reply
             bot_message = ChatMessage(
-                session_id=input_data.session_id,
+                session_id=session.id,
                 sender="bot",
                 message=full_response,
                 timestamp=datetime.utcnow(),
