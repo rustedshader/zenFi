@@ -6,6 +6,8 @@ annotated-types==0.7.0
 antlr4-python3-runtime==4.9.3
 anyio==4.9.0
 asgiref==3.8.1
+asn1crypto==1.5.1
+asyncpg==0.30.0
 attrs==25.3.0
 backoff==2.2.1
 bcrypt==4.3.0
@@ -61,6 +63,7 @@ google-cloud-vision==3.10.1
 google-crc32c==1.7.1rc1
 google-resumable-media==2.7.2
 googleapis-common-protos==1.69.2
+greenlet==3.1.1
 grpc-google-iam-v1==0.14.2
 grpcio==1.71.0
 grpcio-status==1.71.0
@@ -145,6 +148,7 @@ patsy==1.0.1
 pdf2image==1.17.0
 pdfminer.six==20250324
 peewee==3.17.9
+pg8000==1.31.2
 pi_heif==0.22.0
 pikepdf==9.5.2
 pillow==11.1.0
@@ -155,6 +159,7 @@ propcache==0.3.0
 proto-plus==1.26.1
 protobuf==5.29.4
 psutil==7.0.0
+psycopg2-binary==2.9.10
 pyasn1==0.4.8
 pyasn1_modules==0.4.1
 pycocotools==2.0.8
@@ -163,6 +168,7 @@ pydantic==2.10.6
 pydantic-settings==2.8.1
 pydantic_core==2.27.2
 Pygments==2.19.1
+PyJWT==2.10.1
 pyluach==2.2.0
 PyMySQL==1.1.1
 pyparsing==3.2.2
@@ -192,6 +198,7 @@ rsa==4.9
 safetensors==0.5.3
 scikit-learn==1.6.1
 scipy==1.15.2
+scramp==1.4.5
 shapely==2.0.7
 shellingham==1.5.4
 six==1.17.0
