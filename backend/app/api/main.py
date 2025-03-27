@@ -1,5 +1,6 @@
 import os
 import json
+import re
 import uuid
 from datetime import datetime, timedelta
 from uuid import UUID as uuid_UUID
@@ -460,18 +461,20 @@ async def stream_chat(
         try:
             # Add a heartbeat to keep the connection alive
             yield 'data: {"type":"heartbeat"}\n\n'
-            
+
             async for token in chat_service_manager.stream_message(
                 input_data.session_id, input_data.message, chat_history
             ):
-                if token and token.strip():
-                    full_response += token
-                    # Add token type for better client handling
-                    yield f'data: {{"type":"token","content":{json.dumps(token)}}}\n\n'
-                    
-                    # Add a small delay to prevent overwhelming the client
-                    await asyncio.sleep(0.01)
-            
+                if token:
+                    # Split the token into parts that include whitespace
+                    parts = re.split(r"(\s+)", token)
+                    for part in parts:
+                        if part:  # Ensure part is not empty
+                            full_response += part
+                            # Yield each part individually, preserving whitespace (including newlines)
+                            yield f'data: {{"type":"token","content":{json.dumps(part)}}}\n\n'
+                            await asyncio.sleep(0.01)
+
             # Save bot's full reply
             bot_message = ChatMessage(
                 session_id=session.id,
@@ -482,10 +485,10 @@ async def stream_chat(
             )
             db.add(bot_message)
             await db.commit()
-            
+
             # Send completion message
             yield 'data: {"type":"complete","finishReason":"stop"}\n\n'
-            
+
         except asyncio.CancelledError:
             # Handle client disconnection gracefully
             yield 'data: {"type":"error","finishReason":"cancelled"}\n\n'
@@ -504,7 +507,7 @@ async def stream_chat(
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
             "X-Accel-Buffering": "no",  # Disable nginx buffering
-        }
+        },
     )
 
 
@@ -551,7 +554,7 @@ async def get_chat_history(
             "role": "user" if msg.sender == "user" else "assistant",
             "content": msg.message,
             "timestamp": msg.timestamp.isoformat(),
-            "sources": msg.sources
+            "sources": msg.sources,
         }
         for msg in messages
     ]
