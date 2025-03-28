@@ -1,10 +1,10 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useAuth } from '@/contexts/auth-context'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { ChatMessages } from './chat-messages'
 import { ChatPanel } from './chat-panel'
-import { useAuth } from '@/contexts/auth-context'
 
 interface Message {
   id?: string
@@ -17,77 +17,86 @@ interface Message {
 interface ChatProps {
   id: string
   savedMessages?: Message[]
-  query?: string
   sessionId?: string
+  initialQuery?: string
 }
 
 export function Chat({
   id,
   savedMessages = [],
-  query,
-  sessionId: initialSessionId
+  sessionId: initialSessionId,
+  initialQuery
 }: ChatProps) {
   const [messages, setMessages] = useState<Message[]>(savedMessages)
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
-  // Use provided sessionId if available; otherwise null so that we create a new session
   const [sessionId, setSessionId] = useState<string | null>(
     initialSessionId || null
   )
   const { isLoggedIn, logout } = useAuth()
+  const initializedRef = useRef(false)
 
+  // Combined effect for session creation and initial query
   useEffect(() => {
-    async function createSession() {
+    async function initializeChat() {
+      if (!isLoggedIn || initializedRef.current) return
+
       try {
-        const response = await fetch('/api/sessions', { method: 'POST' })
-        if (response.ok) {
+        initializedRef.current = true
+
+        // Only create session if we don't have one
+        if (!sessionId) {
+          const response = await fetch('/api/sessions', { method: 'POST' })
+          if (!response.ok) {
+            if (response.status === 401) {
+              logout()
+              toast.error('Session expired. Please login again.')
+              return
+            }
+            throw new Error('Failed to create session')
+          }
           const data = await response.json()
           setSessionId(data.session_id)
-        } else if (response.status === 401) {
-          logout()
-          toast.error('Session expired. Please login again.')
-        } else {
-          console.error(
-            'Session creation failed:',
-            response.status,
-            await response.text()
+        }
+
+        // Fetch chat history if we have a session
+        if (sessionId) {
+          const historyResponse = await fetch(
+            `/api/chat/history?sessionId=${sessionId}`
           )
-          toast.error('Failed to create session')
-        }
-      } catch (error) {
-        console.error(error)
-        toast.error('Error creating session')
-      }
-    }
-    if (isLoggedIn && !sessionId) {
-      createSession()
-    }
-  }, [isLoggedIn, sessionId, logout])
-
-  useEffect(() => {
-    async function fetchChatHistory() {
-      if (!sessionId) return
-
-      try {
-        const response = await fetch(`/api/chat/history?sessionId=${sessionId}`)
-        if (!response.ok) {
-          if (response.status === 401) {
-            logout()
-            toast.error('Session expired. Please login again.')
-            return
+          if (!historyResponse.ok) {
+            if (historyResponse.status === 401) {
+              logout()
+              toast.error('Session expired. Please login again.')
+              return
+            }
+            throw new Error('Failed to fetch chat history')
           }
-          throw new Error('Failed to fetch chat history')
+          const history = await historyResponse.json()
+          setMessages(history)
+
+          // Handle initial query after history is loaded
+          if (initialQuery && history.length === 0) {
+            const userMessage: Message = {
+              role: 'user',
+              content: initialQuery,
+              id: `user-${Date.now()}-${Math.random()
+                .toString(36)
+                .substring(2, 9)}`,
+              timestamp: Date.now()
+            }
+            append(userMessage)
+          }
         }
-        const history = await response.json()
-        setMessages(history)
       } catch (error) {
-        console.error('Error fetching chat history:', error)
-        toast.error('Failed to load chat history')
+        console.error('Error initializing chat:', error)
+        toast.error('Failed to initialize chat')
+        initializedRef.current = false // Reset on error
       }
     }
 
-    fetchChatHistory()
-  }, [sessionId, logout])
+    initializeChat()
+  }, [isLoggedIn, initialQuery, logout]) // Removed sessionId from dependencies
 
   const append = useCallback(
     async (userMessage: Message) => {
@@ -97,7 +106,6 @@ export function Chat({
       }
 
       setIsLoading(true)
-      // Append the user message
       setMessages(prev => [...prev, userMessage])
       setInput('')
 
@@ -105,7 +113,6 @@ export function Chat({
         const response = await fetch('/api/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          // Note: the API route translates "sessionId" into the backend's expected "session_id" field.
           body: JSON.stringify({ message: userMessage.content, sessionId })
         })
 
@@ -124,10 +131,11 @@ export function Chat({
           let assistantMessage: Message = {
             role: 'assistant',
             content: '',
-            id: `assistant-${Date.now()}`,
+            id: `assistant-${Date.now()}-${Math.random()
+              .toString(36)
+              .substring(2, 9)}`,
             timestamp: Date.now()
           }
-          // Don't add the assistant message immediately
           let hasAddedAssistantMessage = false
 
           let buffer = ''
@@ -198,14 +206,15 @@ export function Chat({
             append({
               role: 'user',
               content: input,
-              id: `user-${Date.now()}`
+              id: `user-${Date.now()}-${Math.random()
+                .toString(36)
+                .substring(2, 9)}`
             })
           }
         }}
         isLoading={isLoading}
         messages={messages}
         setMessages={setMessages}
-        query={query}
         stop={stop}
         append={append}
       />

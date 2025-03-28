@@ -1,25 +1,24 @@
+// frontend/app/page.tsx
 'use client'
 
 import { useAuth } from '@/contexts/auth-context'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
-import { toast } from 'sonner'
 import Textarea from 'react-textarea-autosize'
-
-// TODO When Someone Visits This Page Take Query in Input Field then redirect them to /chat/[sessionId]
+import { toast } from 'sonner'
 
 export default function Page() {
   const router = useRouter()
   const [error, setError] = useState<string | null>(null)
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
-  const { isLoggedIn } = useAuth()
+  const { isLoggedIn, isLoading: isAuthLoading } = useAuth()
 
   useEffect(() => {
-    if (!isLoggedIn) {
+    if (!isAuthLoading && !isLoggedIn) {
       router.push('/login')
     }
-  }, [router, isLoggedIn])
+  }, [router, isLoggedIn, isAuthLoading])
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -27,8 +26,11 @@ export default function Page() {
 
     setIsLoading(true)
     try {
-      const response = await fetch('/api/sessions', {
-        method: 'POST'
+      // Create session first
+      const response = await fetch('/api/sessions/init', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: input.trim() })
       })
 
       if (!response.ok) {
@@ -37,6 +39,8 @@ export default function Page() {
       }
 
       const data = await response.json()
+
+      // Redirect with both session ID and query
       router.push(
         `/chat/${data.session_id}?query=${encodeURIComponent(input.trim())}`
       )
@@ -44,9 +48,25 @@ export default function Page() {
       console.error('Error:', error)
       setError('Failed to initialize chat. Please try again later.')
       toast.error('Failed to create chat session')
+      router.push('/')
     } finally {
       setIsLoading(false)
     }
+  }
+
+  if (isAuthLoading) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center p-24">
+        <div className="w-full max-w-md space-y-8">
+          <div className="text-center">
+            <h1 className="text-2xl font-bold">Loading...</h1>
+            <p className="mt-2 text-gray-600">
+              Please wait while we check your authentication status.
+            </p>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   if (error) {

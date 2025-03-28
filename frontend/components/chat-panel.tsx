@@ -25,7 +25,6 @@ interface ChatPanelProps {
   isLoading: boolean
   messages: Message[]
   setMessages: (messages: Message[]) => void
-  query?: string
   stop: () => void
   append: (message: Message) => void
 }
@@ -37,24 +36,12 @@ export function ChatPanel({
   isLoading,
   messages,
   setMessages,
-  query,
   stop,
   append
 }: ChatPanelProps) {
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const isFirstRender = useRef(true)
   const [isComposing, setIsComposing] = useState(false)
-
-  useEffect(() => {
-    if (isFirstRender.current && query && query.trim().length > 0) {
-      append({
-        role: 'user',
-        content: query,
-        id: `user-message-${Date.now()}`
-      })
-      isFirstRender.current = false
-    }
-  }, [query, append])
 
   return (
     <div className="fixed bottom-0 left-0 w-full">

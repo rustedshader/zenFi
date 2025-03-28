@@ -267,7 +267,11 @@ class ChatServiceManager:
                 # Get the ChatService instance specific to this session
                 chat_service = self.get_chat_service(session_id)
                 # If your ChatService supports passing chat_history, include it here
-                response = await chat_service.process_input(message)
+                result = chat_service.process_input(message)
+                if asyncio.iscoroutine(result):
+                    response = await result
+                else:
+                    response = result
                 return ChatResponse(message=response, sources=[])
         except Exception as e:
             return ChatResponse(message=f"An error occurred: {str(e)}", sources=[])

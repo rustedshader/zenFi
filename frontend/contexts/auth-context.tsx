@@ -1,9 +1,10 @@
 'use client'
 
-import { createContext, useContext, useState, useEffect } from 'react'
+import { createContext, useContext, useEffect, useState } from 'react'
 
 interface AuthContextType {
   isLoggedIn: boolean
+  isLoading: boolean
   login: () => void
   logout: () => void
 }
@@ -12,6 +13,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoggedIn, setIsLoggedIn] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
     const checkToken = () => {
@@ -23,6 +25,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } else {
         setIsLoggedIn(false)
       }
+      setIsLoading(false)
     }
     checkToken()
   }, [])
@@ -35,7 +38,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ isLoggedIn, login, logout }}>
+    <AuthContext.Provider value={{ isLoggedIn, isLoading, login, logout }}>
       {children}
     </AuthContext.Provider>
   )
