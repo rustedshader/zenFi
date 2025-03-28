@@ -7,6 +7,7 @@ interface Message {
   role: 'user' | 'assistant'
   content: string
   sources?: any[]
+  timestamp?: number
 }
 
 interface RenderMessageProps {
@@ -16,6 +17,7 @@ interface RenderMessageProps {
   onOpenChange: (id: string, open: boolean) => void
   onQuerySelect: (query: string) => void
   chatId?: string
+  isLoading?: boolean
 }
 
 export function RenderMessage({
@@ -24,7 +26,8 @@ export function RenderMessage({
   getIsOpen,
   onOpenChange,
   onQuerySelect,
-  chatId
+  chatId,
+  isLoading = false
 }: RenderMessageProps) {
   if (message.role === 'user') {
     return <UserMessage message={message.content} />
@@ -38,6 +41,8 @@ export function RenderMessage({
       onOpenChange={open => onOpenChange(messageId, open)}
       chatId={chatId}
       sources={message.sources}
+      timestamp={message.timestamp}
+      isLoading={isLoading}
     />
   )
 }

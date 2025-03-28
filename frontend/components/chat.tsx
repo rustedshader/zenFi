@@ -11,6 +11,7 @@ interface Message {
   role: 'user' | 'assistant'
   content: string
   sources?: any[]
+  timestamp?: number
 }
 
 interface ChatProps {
@@ -33,7 +34,7 @@ export function Chat({
   const [sessionId, setSessionId] = useState<string | null>(
     initialSessionId || null
   )
-  const { isLoggedIn } = useAuth()
+  const { isLoggedIn, logout } = useAuth()
 
   useEffect(() => {
     async function createSession() {
@@ -42,6 +43,9 @@ export function Chat({
         if (response.ok) {
           const data = await response.json()
           setSessionId(data.session_id)
+        } else if (response.status === 401) {
+          logout()
+          toast.error('Session expired. Please login again.')
         } else {
           console.error(
             'Session creation failed:',
@@ -58,7 +62,7 @@ export function Chat({
     if (isLoggedIn && !sessionId) {
       createSession()
     }
-  }, [isLoggedIn, sessionId])
+  }, [isLoggedIn, sessionId, logout])
 
   useEffect(() => {
     async function fetchChatHistory() {
@@ -67,6 +71,11 @@ export function Chat({
       try {
         const response = await fetch(`/api/chat/history?sessionId=${sessionId}`)
         if (!response.ok) {
+          if (response.status === 401) {
+            logout()
+            toast.error('Session expired. Please login again.')
+            return
+          }
           throw new Error('Failed to fetch chat history')
         }
         const history = await response.json()
@@ -78,7 +87,7 @@ export function Chat({
     }
 
     fetchChatHistory()
-  }, [sessionId])
+  }, [sessionId, logout])
 
   const append = useCallback(
     async (userMessage: Message) => {
@@ -100,7 +109,14 @@ export function Chat({
           body: JSON.stringify({ message: userMessage.content, sessionId })
         })
 
-        if (!response.ok) throw new Error('Network response was not ok')
+        if (!response.ok) {
+          if (response.status === 401) {
+            logout()
+            toast.error('Session expired. Please login again.')
+            return
+          }
+          throw new Error('Network response was not ok')
+        }
 
         const reader = response.body?.getReader()
         if (reader) {
@@ -108,9 +124,11 @@ export function Chat({
           let assistantMessage: Message = {
             role: 'assistant',
             content: '',
-            id: `assistant-${Date.now()}`
+            id: `assistant-${Date.now()}`,
+            timestamp: Date.now()
           }
-          setMessages(prev => [...prev, assistantMessage])
+          // Don't add the assistant message immediately
+          let hasAddedAssistantMessage = false
 
           let buffer = ''
           while (true) {
@@ -126,7 +144,15 @@ export function Chat({
                 const jsonStr = line.replace(/^data:\s*/, '')
                 try {
                   const parsed = JSON.parse(jsonStr)
+                  if (parsed.type === 'complete') {
+                    setIsLoading(false)
+                    break
+                  }
                   if (parsed.content) {
+                    if (!hasAddedAssistantMessage) {
+                      setMessages(prev => [...prev, assistantMessage])
+                      hasAddedAssistantMessage = true
+                    }
                     assistantMessage.content += parsed.content
                     setMessages(prev => {
                       const updated = [...prev]
@@ -141,7 +167,6 @@ export function Chat({
             }
           }
         }
-        setIsLoading(false)
       } catch (error) {
         console.error('Error sending message:', error)
         toast.error('Error sending message')
@@ -149,7 +174,7 @@ export function Chat({
         setIsLoading(false)
       }
     },
-    [sessionId]
+    [sessionId, logout]
   )
 
   const stop = () => setIsLoading(false)

@@ -1,9 +1,11 @@
 import { cn } from '@/lib/utils'
-import { ChevronDown, ChevronUp } from 'lucide-react'
+import { ChevronDown, ChevronUp, Copy } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Button } from './ui/button'
 import { SearchResults } from './search-results'
+import { motion, AnimatePresence } from 'framer-motion'
+import { toast } from 'sonner'
 
 interface AnswerSectionProps {
   content: string
@@ -11,6 +13,8 @@ interface AnswerSectionProps {
   onOpenChange: (open: boolean) => void
   chatId?: string
   sources?: any[]
+  timestamp?: number
+  isLoading?: boolean
 }
 
 export function AnswerSection({
@@ -18,8 +22,19 @@ export function AnswerSection({
   isOpen,
   onOpenChange,
   chatId,
-  sources
+  sources,
+  timestamp,
+  isLoading = false
 }: AnswerSectionProps) {
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(content)
+      toast.success('Copied to clipboard')
+    } catch (err) {
+      toast.error('Failed to copy')
+    }
+  }
+
   // Process sources to identify videos and web results
   const processedSources =
     sources?.map(source => {
@@ -43,95 +58,109 @@ export function AnswerSection({
     }) || []
 
   return (
-    <div className="prose dark:prose-invert max-w-none">
-      <div className="flex items-start gap-2">
-        <div className="flex-shrink-0 mt-1">
-          <div className="size-6 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center">
-            <svg
-              className="size-4 text-gray-600 dark:text-gray-300"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
-              />
-            </svg>
-          </div>
-        </div>
-        <div className="flex-1">
-          <ReactMarkdown
-            remarkPlugins={[remarkGfm]}
-            components={{
-              p: ({ children }) => (
-                <p className="text-base leading-relaxed whitespace-pre-wrap">
-                  {children}
-                </p>
-              ),
-              a: ({ href, children }) => {
-                if (
-                  href?.includes('youtube.com') ||
-                  href?.includes('youtu.be')
-                ) {
-                  return (
-                    <a
-                      href={href}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400 hover:underline"
-                    >
-                      <svg
-                        className="size-4"
-                        viewBox="0 0 24 24"
-                        fill="currentColor"
-                      >
-                        <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
-                      </svg>
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="prose dark:prose-invert max-w-none"
+    >
+      <div className="flex items-start gap-3 p-4">
+        <div className="flex-1 space-y-3">
+          <div className="space-y-4 overflow-hidden">
+            <div className="prose prose-sm dark:prose-invert max-w-none">
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={{
+                  p: ({ children }) => (
+                    <p className="text-base leading-relaxed whitespace-pre-wrap text-gray-700 dark:text-gray-200">
                       {children}
-                    </a>
-                  )
-                }
-                return (
-                  <a
-                    href={href}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-blue-600 dark:text-blue-400 hover:underline"
-                  >
-                    {children}
-                  </a>
-                )
-              }
-            }}
-          >
-            {content}
-          </ReactMarkdown>
+                    </p>
+                  ),
+                  a: ({ href, children }) => {
+                    if (
+                      href?.includes('youtube.com') ||
+                      href?.includes('youtu.be')
+                    ) {
+                      return (
+                        <a
+                          href={href}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300"
+                        >
+                          {children}
+                        </a>
+                      )
+                    }
+                    return (
+                      <a
+                        href={href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300"
+                      >
+                        {children}
+                      </a>
+                    )
+                  },
+                  code: ({ inline, className, children, ...props }) => {
+                    const match = /language-(\w+)/.exec(className || '')
+                    return !inline && match ? (
+                      <code
+                        className={className}
+                        {...props}
+                        style={{
+                          backgroundColor: 'transparent',
+                          padding: '0.5rem',
+                          borderRadius: '0.375rem',
+                          fontSize: '0.875rem',
+                          lineHeight: '1.5',
+                          display: 'block',
+                          overflowX: 'auto'
+                        }}
+                      >
+                        {children}
+                      </code>
+                    ) : (
+                      <code
+                        className={className}
+                        {...props}
+                        style={{
+                          backgroundColor: 'rgba(0, 0, 0, 0.05)',
+                          padding: '0.2em 0.4em',
+                          borderRadius: '0.25rem',
+                          fontSize: '0.875em',
+                          lineHeight: '1.5'
+                        }}
+                      >
+                        {children}
+                      </code>
+                    )
+                  }
+                }}
+              >
+                {content}
+              </ReactMarkdown>
+            </div>
+            {!isLoading && (
+              <div className="flex justify-end items-center gap-2 pt-2 border-t border-gray-100 dark:border-gray-800">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={handleCopy}
+                  className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                >
+                  <Copy className="size-4" />
+                </Button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
-
-      {/* Sources section */}
       {processedSources.length > 0 && (
-        <div className="mt-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-              Sources & References
-            </h3>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => onOpenChange(!isOpen)}
-              className="hover:bg-transparent"
-            >
-              {isOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-            </Button>
-          </div>
-          {isOpen && <SearchResults results={processedSources} />}
+        <div className="mt-4">
+          <SearchResults results={processedSources} />
         </div>
       )}
-    </div>
+    </motion.div>
   )
 }

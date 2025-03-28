@@ -1,3 +1,5 @@
+import time
+
 from langchain_community.document_loaders import WikipediaLoader
 from langchain_community.utilities import SearxSearchWrapper
 from langchain_community.tools import BraveSearch
@@ -26,7 +28,6 @@ from nselib.derivatives import (
 import yfinance as yf
 from langchain_community.document_loaders import YoutubeLoader
 
-# Import the mftool library for Mutual Funds data in India
 from mftool import Mftool
 
 
@@ -48,6 +49,19 @@ class ChatTools:
 
         # Initialize mftool for mutual funds data
         self.mftool = Mftool()
+
+    def _mftool_retry(self, func, *args, retries=3, delay=5, **kwargs):
+        """
+        Helper method to retry mftool calls in case of transient errors.
+        """
+        last_exception = None
+        for attempt in range(retries):
+            try:
+                return func(*args, **kwargs)
+            except Exception as e:
+                last_exception = e
+                time.sleep(delay)
+        raise last_exception
 
     def get_youtube_captions(self, video_ids: list[str]):
         """Retrieve captions and video info for a list of YouTube video IDs."""
@@ -396,7 +410,7 @@ class ChatTools:
             str: A string representation of the available schemes dictionary.
         """
         try:
-            result = self.mftool.get_available_schemes(amc)
+            result = self._mftool_retry(self.mftool.get_available_schemes, amc)
             return str(result)
         except Exception as e:
             return f"Error retrieving available schemes for {amc}: {str(e)}"
@@ -411,7 +425,9 @@ class ChatTools:
             str: The scheme quote data.
         """
         try:
-            result = self.mftool.get_scheme_quote(str(scheme_code), as_json=as_json)
+            result = self._mftool_retry(
+                self.mftool.get_scheme_quote, str(scheme_code), as_json=as_json
+            )
             return str(result)
         except Exception as e:
             return f"Error retrieving scheme quote for {scheme_code}: {str(e)}"
@@ -426,10 +442,14 @@ class ChatTools:
             str: The scheme details.
         """
         try:
-            result = self.mftool.get_scheme_details(str(scheme_code))
             if as_json:
-                # Assuming get_scheme_info supports json output for more details.
-                result = self.mftool.get_scheme_info(str(scheme_code), as_json=True)
+                result = self._mftool_retry(
+                    self.mftool.get_scheme_info, str(scheme_code), as_json=True
+                )
+            else:
+                result = self._mftool_retry(
+                    self.mftool.get_scheme_details, str(scheme_code)
+                )
             return str(result)
         except Exception as e:
             return f"Error retrieving scheme details for {scheme_code}: {str(e)}"
@@ -443,11 +463,7 @@ class ChatTools:
             str: The scheme codes dictionary.
         """
         try:
-            result = (
-                self.mftool.get_scheme_codes()
-                if not as_json
-                else self.mftool.get_scheme_codes(as_json=True)
-            )
+            result = self._mftool_retry(self.mftool.get_scheme_codes, as_json=as_json)
             return str(result)
         except Exception as e:
             return f"Error retrieving scheme codes: {str(e)}"
@@ -465,8 +481,11 @@ class ChatTools:
             str: The historical NAV data.
         """
         try:
-            result = self.mftool.get_scheme_historical_nav(
-                str(scheme_code), as_json=as_json, as_Dataframe=as_dataframe
+            result = self._mftool_retry(
+                self.mftool.get_scheme_historical_nav,
+                str(scheme_code),
+                as_json=as_json,
+                as_Dataframe=as_dataframe,
             )
             return str(result)
         except Exception as e:
@@ -492,7 +511,8 @@ class ChatTools:
             str: Historical NAV data.
         """
         try:
-            result = self.mftool.history(
+            result = self._mftool_retry(
+                self.mftool.history,
                 str(scheme_code),
                 start=start,
                 end=end,
@@ -513,7 +533,9 @@ class ChatTools:
             str: Market value details.
         """
         try:
-            result = self.mftool.calculate_balance_units_value(str(scheme_code), units)
+            result = self._mftool_retry(
+                self.mftool.calculate_balance_units_value, str(scheme_code), units
+            )
             return str(result)
         except Exception as e:
             return f"Error calculating balance units value for {scheme_code}: {str(e)}"
@@ -536,7 +558,8 @@ class ChatTools:
             str: Returns calculation details.
         """
         try:
-            result = self.mftool.calculate_returns(
+            result = self._mftool_retry(
+                self.mftool.calculate_returns,
                 code=str(scheme_code),
                 balanced_units=balanced_units,
                 monthly_sip=monthly_sip,
@@ -555,7 +578,9 @@ class ChatTools:
             str: Performance data.
         """
         try:
-            result = self.mftool.get_open_ended_equity_scheme_performance(as_json)
+            result = self._mftool_retry(
+                self.mftool.get_open_ended_equity_scheme_performance, as_json
+            )
             return str(result)
         except Exception as e:
             return f"Error retrieving equity scheme performance: {str(e)}"
@@ -569,7 +594,9 @@ class ChatTools:
             str: Performance data.
         """
         try:
-            result = self.mftool.get_open_ended_debt_scheme_performance(as_json)
+            result = self._mftool_retry(
+                self.mftool.get_open_ended_debt_scheme_performance, as_json
+            )
             return str(result)
         except Exception as e:
             return f"Error retrieving debt scheme performance: {str(e)}"
@@ -583,7 +610,9 @@ class ChatTools:
             str: Performance data.
         """
         try:
-            result = self.mftool.get_open_ended_hybrid_scheme_performance(as_json)
+            result = self._mftool_retry(
+                self.mftool.get_open_ended_hybrid_scheme_performance, as_json
+            )
             return str(result)
         except Exception as e:
             return f"Error retrieving hybrid scheme performance: {str(e)}"
@@ -597,7 +626,9 @@ class ChatTools:
             str: Performance data.
         """
         try:
-            result = self.mftool.get_open_ended_solution_scheme_performance(as_json)
+            result = self._mftool_retry(
+                self.mftool.get_open_ended_solution_scheme_performance, as_json
+            )
             return str(result)
         except Exception as e:
             return f"Error retrieving solution scheme performance: {str(e)}"
@@ -611,7 +642,7 @@ class ChatTools:
             str: AMC profiles.
         """
         try:
-            result = self.mftool.get_all_amc_profiles(as_json)
+            result = self._mftool_retry(self.mftool.get_all_amc_profiles, as_json)
             return str(result)
         except Exception as e:
             return f"Error retrieving AMC profiles: {str(e)}"

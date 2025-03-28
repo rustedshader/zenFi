@@ -20,7 +20,7 @@ export default function Header() {
         {isLoggedIn ? (
           <>
             <Button variant="ghost" onClick={() => router.push('/sessions')}>
-              Sessions
+              History
             </Button>
             <Button variant="ghost" onClick={handleLogout}>
               Logout
