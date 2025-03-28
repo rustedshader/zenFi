@@ -17,20 +17,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const checkToken = () => {
-      const token = document.cookie
-        .split('; ')
-        .find(row => row.startsWith('jwt_token='))
-      if (token) {
-        setIsLoggedIn(true)
-      } else {
+      try {
+        const token = document.cookie
+          .split('; ')
+          .find(row => row.startsWith('jwt_token='))
+
+        if (token) {
+          setIsLoggedIn(true)
+        } else {
+          setIsLoggedIn(false)
+        }
+      } catch (error) {
+        console.error('Error checking auth token:', error)
         setIsLoggedIn(false)
+      } finally {
+        setIsLoading(false)
       }
-      setIsLoading(false)
     }
+
+    // Initial check
     checkToken()
+
+    // Set up an interval to periodically check the token
+    const interval = setInterval(checkToken, 1000)
+
+    return () => clearInterval(interval)
   }, [])
 
-  const login = () => setIsLoggedIn(true)
+  const login = () => {
+    setIsLoggedIn(true)
+    setIsLoading(false)
+  }
+
   const logout = () => {
     setIsLoggedIn(false)
     document.cookie =
