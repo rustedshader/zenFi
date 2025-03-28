@@ -4,11 +4,11 @@ export default async function ChatSessionPage({
   params,
   searchParams
 }: {
-  params: { sessionId: string }
-  searchParams: { query?: string }
+  params: Promise<{ sessionId: string }>
+  searchParams: Promise<{ query?: string }>
 }) {
   const { sessionId } = await params
-  const { query } = searchParams
+  const { query } = await searchParams
 
   return <Chat id={sessionId} sessionId={sessionId} initialQuery={query} />
 }
