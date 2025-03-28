@@ -243,22 +243,31 @@ brave_search = BraveSearch.from_api_key(
 # ChatServiceManager
 class ChatServiceManager:
     def __init__(self):
-        self.chat_service = ChatService(
-            llm=llm,
-            google_search_wrapper=search,
-            google_embedings=google_embeddings,
-            tavily_tool=tavily_tool,
-            brave_search=brave_search,
-        )
-        # Add a semaphore to limit concurrent requests
+        # Dictionary to hold ChatService instances per session
+        self.chat_services = {}
         self.semaphore = asyncio.Semaphore(5)  # Limit to 5 concurrent requests
+
+    def get_chat_service(self, session_id: str):
+        # If there's no ChatService for this session, create one
+        if session_id not in self.chat_services:
+            self.chat_services[session_id] = ChatService(
+                llm=llm,
+                google_search_wrapper=search,
+                google_embedings=google_embeddings,
+                tavily_tool=tavily_tool,
+                brave_search=brave_search,
+            )
+        return self.chat_services[session_id]
 
     async def process_message(
         self, session_id: str, message: str, chat_history: list
     ) -> ChatResponse:
         try:
             async with self.semaphore:
-                response = await self.chat_service.process_input(message)
+                # Get the ChatService instance specific to this session
+                chat_service = self.get_chat_service(session_id)
+                # If your ChatService supports passing chat_history, include it here
+                response = await chat_service.process_input(message)
                 return ChatResponse(message=response, sources=[])
         except Exception as e:
             return ChatResponse(message=f"An error occurred: {str(e)}", sources=[])
@@ -268,17 +277,14 @@ class ChatServiceManager:
     ) -> AsyncGenerator[str, None]:
         try:
             async with self.semaphore:
-                # Add rate limiting to prevent overwhelming the LLM
-                async for token in self.chat_service.stream_input(message):
+                chat_service = self.get_chat_service(session_id)
+                async for token in chat_service.stream_input(message):
                     if token and token.strip():
-                        # Add a small delay between tokens to prevent overwhelming the client
                         await asyncio.sleep(0.01)
                         yield token
         except asyncio.CancelledError:
-            # Handle cancellation gracefully
             raise
         except Exception as e:
-            # Log the error and yield an error message
             print(f"Streaming error in ChatServiceManager: {str(e)}")
             yield f"Error: {str(e)}"
 

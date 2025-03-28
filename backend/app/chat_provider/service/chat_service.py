@@ -122,6 +122,54 @@ class WebResearchInput(BaseModel):
     symbol: str
 
 
+class MFAvailableSchemesInput(BaseModel):
+    amc: str = Field(..., description="AMC name, e.g., 'ICICI'")
+
+
+class MFQuoteInput(BaseModel):
+    scheme_code: str = Field(..., description="Mutual fund scheme code, e.g., '119597'")
+    as_json: bool = Field(False, description="Return data in JSON format if true.")
+
+
+class MFDetailsInput(BaseModel):
+    scheme_code: str = Field(..., description="Mutual fund scheme code, e.g., '117865'")
+    as_json: bool = Field(False, description="Return data in JSON format if true.")
+
+
+class MFHistoricalNAVInput(BaseModel):
+    scheme_code: str = Field(..., description="Mutual fund scheme code, e.g., '119597'")
+    as_json: bool = Field(False, description="Return data in JSON format if true.")
+    as_dataframe: bool = Field(False, description="Return data as a DataFrame if true.")
+
+
+class MFHistoryInput(BaseModel):
+    scheme_code: str = Field(..., description="Mutual fund scheme code")
+    start: str = Field(None, description="Start date in 'dd-mm-yyyy' format (optional)")
+    end: str = Field(None, description="End date in 'dd-mm-yyyy' format (optional)")
+    period: str = Field(None, description="Period (e.g., '3mo', optional)")
+    as_dataframe: bool = Field(False, description="Return as a DataFrame if true.")
+
+
+class MFBalanceUnitsValueInput(BaseModel):
+    scheme_code: str = Field(..., description="Mutual fund scheme code, e.g., '119597'")
+    units: float = Field(..., description="Number of units held.")
+
+
+class MFReturnsInput(BaseModel):
+    scheme_code: str = Field(..., description="Mutual fund scheme code, e.g., '119062'")
+    balanced_units: float = Field(..., description="Units balance")
+    monthly_sip: float = Field(..., description="Monthly SIP amount")
+    investment_in_months: int = Field(..., description="Investment duration in months")
+
+
+class MFPerformanceInput(BaseModel):
+    as_json: bool = Field(True, description="Return data in JSON format if true.")
+
+
+class MFAllAMCProfilesInput(BaseModel):
+    as_json: bool = Field(True, description="Return data in JSON format if true.")
+
+
 class NoInput(BaseModel):
     pass
 
@@ -324,6 +372,97 @@ class ChatService:
             args_schema=NoInput,
         )
 
+        self.mf_available_schemes_tool = StructuredTool.from_function(
+            func=ChatTools().get_mf_available_schemes,
+            name="Get_MF_Available_Schemes",
+            description="Retrieve all available mutual fund schemes for a given AMC. Input: amc (str).",
+            args_schema=MFAvailableSchemesInput,
+        )
+
+        self.mf_quote_tool = StructuredTool.from_function(
+            func=ChatTools().get_mf_quote,
+            name="Get_MF_Quote",
+            description="Retrieve the latest quote for a given mutual fund scheme.",
+            args_schema=MFQuoteInput,
+        )
+
+        self.mf_details_tool = StructuredTool.from_function(
+            func=ChatTools().get_mf_details,
+            name="Get_MF_Details",
+            description="Retrieve detailed info for a given mutual fund scheme.",
+            args_schema=MFDetailsInput,
+        )
+
+        self.mf_codes_tool = StructuredTool.from_function(
+            func=ChatTools().get_mf_codes,
+            name="Get_MF_Codes",
+            description="Retrieve a dictionary of all mutual fund scheme codes and names.",
+            args_schema=NoInput,
+        )
+
+        self.mf_historical_nav_tool = StructuredTool.from_function(
+            func=ChatTools().get_mf_historical_nav,
+            name="Get_MF_Historical_NAV",
+            description="Retrieve historical NAV data for a given mutual fund scheme.",
+            args_schema=MFHistoricalNAVInput,
+        )
+
+        self.mf_history_tool = StructuredTool.from_function(
+            func=ChatTools().mf_history,
+            name="Get_MF_History",
+            description="Retrieve historical NAV data with daily changes for a mutual fund scheme.",
+            args_schema=MFHistoryInput,
+        )
+
+        self.mf_balance_units_value_tool = StructuredTool.from_function(
+            func=ChatTools().calculate_balance_units_value,
+            name="Calculate_MF_Balance_Units_Value",
+            description="Calculate the current market value of held units for a mutual fund scheme.",
+            args_schema=MFBalanceUnitsValueInput,
+        )
+
+        self.mf_returns_tool = StructuredTool.from_function(
+            func=ChatTools().calculate_returns,
+            name="Calculate_MF_Returns",
+            description="Calculate absolute and IRR annualised returns for a mutual fund scheme.",
+            args_schema=MFReturnsInput,
+        )
+
+        self.mf_open_ended_equity_tool = StructuredTool.from_function(
+            func=ChatTools().get_open_ended_equity_scheme_performance,
+            name="Get_MF_Open_Ended_Equity_Performance",
+            description="Retrieve daily performance of open ended equity mutual fund schemes.",
+            args_schema=MFPerformanceInput,
+        )
+
+        self.mf_open_ended_debt_tool = StructuredTool.from_function(
+            func=ChatTools().get_open_ended_debt_scheme_performance,
+            name="Get_MF_Open_Ended_Debt_Performance",
+            description="Retrieve daily performance of open ended debt mutual fund schemes.",
+            args_schema=MFPerformanceInput,
+        )
+
+        self.mf_open_ended_hybrid_tool = StructuredTool.from_function(
+            func=ChatTools().get_open_ended_hybrid_scheme_performance,
+            name="Get_MF_Open_Ended_Hybrid_Performance",
+            description="Retrieve daily performance of open ended hybrid mutual fund schemes.",
+            args_schema=MFPerformanceInput,
+        )
+
+        self.mf_open_ended_solution_tool = StructuredTool.from_function(
+            func=ChatTools().get_open_ended_solution_scheme_performance,
+            name="Get_MF_Open_Ended_Solution_Performance",
+            description="Retrieve daily performance of open ended solution mutual fund schemes.",
+            args_schema=MFPerformanceInput,
+        )
+
+        self.mf_all_amc_profiles_tool = StructuredTool.from_function(
+            func=ChatTools().get_all_amc_profiles,
+            name="Get_All_MF_AMC_Profiles",
+            description="Retrieve profile data of all mutual fund AMCs.",
+            args_schema=MFAllAMCProfilesInput,
+        )
+
         # Combine all tools into the tools list
         self.tools = [
             self.tavily_tool,
@@ -354,6 +493,19 @@ class ChatService:
             self.datetime_tool,
             self.youtube_captions_tool,
             self.google_search,
+            self.mf_available_schemes_tool,
+            self.mf_quote_tool,
+            self.mf_details_tool,
+            self.mf_codes_tool,
+            self.mf_historical_nav_tool,
+            self.mf_history_tool,
+            self.mf_balance_units_value_tool,
+            self.mf_returns_tool,
+            self.mf_open_ended_equity_tool,
+            self.mf_open_ended_debt_tool,
+            self.mf_open_ended_hybrid_tool,
+            self.mf_open_ended_solution_tool,
+            self.mf_all_amc_profiles_tool,
         ]
 
         # Initialize state with system message (using the previous system message)
@@ -433,22 +585,39 @@ class ChatService:
 
 Please execute the following steps and provide the final output. Do not just list the steps; actually perform the calculations and actions required
 
+**Mutual Funds Data Tools for Financial Analysis**
+- Use *Get_MF_Available_Schemes* to Retrieve all available mutual fund schemes for a given AMC.
+- Use *Get_MF_Quote* to Retrieve the latest quote for a given mutual fund scheme.
+- Use *Get_MF_Details* to Retrieve detailed information for a given mutual fund scheme.
+- Use *Get_MF_Codes* to Retrieve a dictionary of all mutual fund scheme codes and their names.
+- Use *Get_MF_Historical_NAV* to Retrieve historical NAV data for a given mutual fund scheme.
+- Use *Get_MF_History* to Retrieve historical NAV data (with one-day change details) for a mutual fund scheme.
+- Use *Calculate_MF_Balance_Units_Value* to Calculate the current market value of held units for a mutual fund scheme.
+- Use *Calculate_MF_Returns* to Calculate absolute and IRR annualised returns for a mutual fund scheme.
+- Use *Get_MF_Open_Ended_Equity_Performance* to Retrieve daily performance data of open-ended equity mutual fund schemes.
+- Use *Get_MF_Open_Ended_Debt_Performance* to Retrieve daily performance data of open-ended debt mutual fund schemes.
+- Use *Get_MF_Open_Ended_Hybrid_Performance* to Retrieve daily performance data of open-ended hybrid mutual fund schemes.
+- Use *Get_MF_Open_Ended_Solution_Performance* to Retrieve daily performance data of open-ended solution mutual fund schemes.
+- Use *Get_All_MF_AMC_Profiles* to Retrieve profile data of all mutual fund AMCs.
+
+Please execute the following steps and provide the final output. Do not just list the steps; actually perform the calculations and actions required
+
 **NSE Data Tools for Financial Analysis:**
-- *Get_Price_Volume_Deliverable_Data*: Fetch historical price, volume, and deliverable data for a stock. Parameters: symbol (e.g., "SBIN"), from_date, to_date, period (e.g., "1M"). Example call: {"symbol": "SBIN", "period": "1M"}.
-- *Get_Index_Data*: Retrieve historical data on NSE indices like NIFTY 50. Parameters: index (e.g., "NIFTY 50"), from_date, to_date, period. Example call: {"index": "NIFTY 50", "period": "6M"}.
-- *Get_Bhav_Copy_With_Delivery*: Get daily market data, including delivery details, for a specific trade date. Parameter: trade_date (e.g., "15-08-2023"). Example call: {"trade_date": "15-08-2023"}.
-- *Get_Equity_List*: Provide a list of all equities available on NSE. No parameters needed. Example call: {}.
-- *Get_FNO_Equity_List*: Fetch derivative equities with lot sizes. No parameters needed. Example call: {}.
-- *Get_Market_Watch_All_Indices*: Obtain current market data for all NSE indices. No parameters needed. Example call: {}.
-- *Get_Financial_Results_For_Equity*: Retrieve financial results for equities. Parameters: from_date, to_date, period, fo_sec (boolean), fin_period (e.g., "Quarterly"). Example call: {"symbol": "RELIANCE", "fin_period": "Quarterly"}.
-- *Get_Future_Price_Volume_Data*: Access historical futures price and volume data for a stock or index. Parameters: symbol (e.g., "BANKNIFTY"), instrument ("FUTIDX" or "FUTSTK"), from_date, to_date, period. Example call: {"symbol": "BANKNIFTY", "instrument": "FUTIDX", "period": "1M"}.
-- *Get_Option_Price_Volume_Data*: Fetch historical options price and volume data. Parameters: symbol (e.g., "NIFTY"), instrument ("OPTIDX" or "OPTSTK"), option_type ("PE" or "CE"), from_date, to_date, period. Example call: {"symbol": "NIFTY", "instrument": "OPTIDX", "option_type": "CE", "period": "1M"}.
-- *Get_FNO_Bhav_Copy*: Retrieve F&O bhav copy for a specific trade date. Parameter: trade_date (e.g., "20-06-2023"). Example call: {"trade_date": "20-06-2023"}.
-- *Get_Participant_Wise_Open_Interest*: Get open interest data by participant type (FII, DII, etc.). Parameter: trade_date (e.g., "20-06-2023"). Example call: {"trade_date": "20-06-2023"}.
-- *Get_Participant_Wise_Trading_Volume*: Fetch trading volume data by participant type. Parameter: trade_date (e.g., "20-06-2023"). Example call: {"trade_date": "20-06-2023"}.
-- *Get_FII_Derivatives_Statistics*: Access FII derivatives trading statistics. Parameter: trade_date (e.g., "20-06-2023"). Example call: {"trade_date": "20-06-2023"}.
-- *Get_Expiry_Dates_Future*: Retrieve future expiry dates. No parameters needed. Example call: {}.
-- *Get_NSE_Live_Option_Chain*: Fetch live option chain data. Parameters: symbol (e.g., "BANKNIFTY"), expiry_date (optional), oi_mode ("full" or "compact"). Example call: {"symbol": "BANKNIFTY", "oi_mode": "full"}.
+- Use *Get_Price_Volume_Deliverable_Data* to Fetch historical price, volume, and deliverable data for a stock. Parameters: symbol (e.g., "SBIN"), from_date, to_date, period (e.g., "1M"). Example call: {"symbol": "SBIN", "period": "1M"}.
+- Use *Get_Index_Data* to Retrieve historical data on NSE indices like NIFTY 50. Parameters: index (e.g., "NIFTY 50"), from_date, to_date, period. Example call: {"index": "NIFTY 50", "period": "6M"}.
+- Use *Get_Bhav_Copy_With_Delivery* to Get daily market data, including delivery details, for a specific trade date. Parameter: trade_date (e.g., "15-08-2023"). Example call: {"trade_date": "15-08-2023"}.
+- Use *Get_Equity_List* to Provide a list of all equities available on NSE. No parameters needed. Example call: {}.
+- Use *Get_FNO_Equity_List* to Fetch derivative equities with lot sizes. No parameters needed. Example call: {}.
+- Use *Get_Market_Watch_All_Indices* to Obtain current market data for all NSE indices. No parameters needed. Example call: {}.
+- Use *Get_Financial_Results_For_Equity* to Retrieve financial results for equities. Parameters: from_date, to_date, period, fo_sec (boolean), fin_period (e.g., "Quarterly"). Example call: {"symbol": "RELIANCE", "fin_period": "Quarterly"}.
+- Use *Get_Future_Price_Volume_Data* to Access historical futures price and volume data for a stock or index. Parameters: symbol (e.g., "BANKNIFTY"), instrument ("FUTIDX" or "FUTSTK"), from_date, to_date, period. Example call: {"symbol": "BANKNIFTY", "instrument": "FUTIDX", "period": "1M"}.
+- Use *Get_Option_Price_Volume_Data* to Fetch historical options price and volume data. Parameters: symbol (e.g., "NIFTY"), instrument ("OPTIDX" or "OPTSTK"), option_type ("PE" or "CE"), from_date, to_date, period. Example call: {"symbol": "NIFTY", "instrument": "OPTIDX", "option_type": "CE", "period": "1M"}.
+- Use *Get_FNO_Bhav_Copy* to Retrieve F&O bhav copy for a specific trade date. Parameter: trade_date (e.g., "20-06-2023"). Example call: {"trade_date": "20-06-2023"}.
+- Use *Get_Participant_Wise_Open_Interest* to Get open interest data by participant type (FII, DII, etc.). Parameter: trade_date (e.g., "20-06-2023"). Example call: {"trade_date": "20-06-2023"}.
+- Use *Get_Participant_Wise_Trading_Volume* to Fetch trading volume data by participant type. Parameter: trade_date (e.g., "20-06-2023"). Example call: {"trade_date": "20-06-2023"}.
+- Use *Get_FII_Derivatives_Statistics* to Access FII derivatives trading statistics. Parameter: trade_date (e.g., "20-06-2023"). Example call: {"trade_date": "20-06-2023"}.
+- Use *Get_Expiry_Dates_Future* to Retrieve future expiry dates. No parameters needed. Example call: {}.
+- Use *Get_NSE_Live_Option_Chain* to Fetch live option chain data. Parameters: symbol (e.g., "BANKNIFTY"), expiry_date (optional), oi_mode ("full" or "compact"). Example call: {"symbol": "BANKNIFTY", "oi_mode": "full"}.
 
 Please execute the following steps and provide the final output. Do not just list the steps; actually perform the calculations and actions required
 
@@ -639,7 +808,7 @@ This pipeline is tailored for a specific query like "Should I invest in Reliance
 - **Output**: Confirmed upward trends and key developments affecting the stock.
 
 #### Step 4: Get Latest Stock Price
-- **Action**: Retrieve Reliance’s current stock price.
+- **Action**: Retrieve Reliance's current stock price.
 - **Tool Used**: *Get_Stock_Prices*: `"RELIANCE.NS"`
 - **Execution**:
   - Current price: approximately ₹2,950 (hypothetical real-time value).
@@ -716,7 +885,7 @@ Your goal is to parse the data successfully, attempting up to 5 times if necessa
    - If an error occurs, analyze it to understand what went wrong.
    - Adjust your approach or switch to a different tool/method to fix the error.
 5. **Retry**: Attempt to parse the data again with the adjusted approach.
-6. **Iterate as Needed**: Repeat the error-handling and retry process (steps 4–5) up to 4 more times if necessary, learning from each attempt to improve your method.
+6. **Iterate as Needed**: Repeat the error-handling and retry process (steps 4-5) up to 4 more times if necessary, learning from each attempt to improve your method.
 7. **Refine the Output**: Once the data is successfully parsed, enhance the result—clean it up, format it properly, or verify its accuracy—to ensure it’s the best possible output.
 8. **Present the Result**: Provide the final refined output along with a brief explanation of:
    - The steps you took.
@@ -816,10 +985,10 @@ The following schema details the tools available to the AI financial assistant, 
 ### 8. Get_Price_Volume_Deliverable_Data
 - **Purpose**: Fetch historical price, volume, and deliverable data for a stock.
 - **Inputs**: 
-  - `symbol`: string (e.g., "SBIN") – Required
-  - `from_date`: string (e.g., "01-01-2023") – Optional
-  - `to_date`: string (e.g., "31-12-2023") – Optional
-  - `period`: string (e.g., "1M") – Optional
+  - `symbol`: string (e.g., "SBIN") - Required
+  - `from_date`: string (e.g., "01-01-2023") - Optional
+  - `to_date`: string (e.g., "31-12-2023") - Optional
+  - `period`: string (e.g., "1M") - Optional
 - **Number of Inputs**: 1 to 4
 - **Input Format**: Dictionary (e.g., `{"symbol": "SBIN", "period": "1M"}`)
 
@@ -971,6 +1140,134 @@ The following schema details the tools available to the AI financial assistant, 
 - **Inputs**:
     - `video_id`: string - Required
 - **Input Format**: List (e.g., `['abc','def']` )
+
+---
+
+### 24 Get_MF_Available_Schemes  
+- **Purpose**: Retrieve all available mutual fund schemes for a given AMC.  
+- **Input**:  
+  - `amc`: string (e.g., `"ICICI"`)  
+- **Number of Inputs**: 1  
+- **Input Format**: Dictionary (e.g., `{"amc": "ICICI"}`)
+
+---
+
+### 25 Get_MF_Quote  
+- **Purpose**: Retrieve the latest quote for a given mutual fund scheme.  
+- **Input**:  
+  - `scheme_code`: string (e.g., `"119597"`)  
+  - `as_json`: boolean (optional, e.g., `false`)  
+- **Number of Inputs**: 1 to 2  
+- **Input Format**: Dictionary (e.g., `{"scheme_code": "119597", "as_json": false}`)
+
+---
+
+### 26 Get_MF_Details  
+- **Purpose**: Retrieve detailed information for a given mutual fund scheme.  
+- **Input**:  
+  - `scheme_code`: string (e.g., `"117865"`)  
+  - `as_json`: boolean (optional, e.g., `false`)  
+- **Number of Inputs**: 1 to 2  
+- **Input Format**: Dictionary (e.g., `{"scheme_code": "117865", "as_json": false}`)
+
+---
+
+### 27 Get_MF_Codes  
+- **Purpose**: Retrieve a dictionary of all mutual fund scheme codes and their names.  
+- **Input**: None  
+- **Number of Inputs**: 0  
+- **Input Format**: Empty dictionary (e.g., `{}`)
+
+---
+
+### 28 Get_MF_Historical_NAV  
+- **Purpose**: Retrieve historical NAV data for a given mutual fund scheme.  
+- **Input**:  
+  - `scheme_code`: string (e.g., `"119597"`)  
+  - `as_json`: boolean (optional, e.g., `false`)  
+  - `as_dataframe`: boolean (optional, e.g., `false`)  
+- **Number of Inputs**: 1 to 3  
+- **Input Format**: Dictionary (e.g., `{"scheme_code": "119597", "as_json": false, "as_dataframe": false}`)
+
+---
+
+### 29 Get_MF_History  
+- **Purpose**: Retrieve historical NAV data (with one-day change details) for a mutual fund scheme.  
+- **Input**:  
+  - `scheme_code`: string (e.g., `"0P0000XVAA"`)  
+  - `start`: string (optional, e.g., `"01-01-2021"`)  
+  - `end`: string (optional, e.g., `"31-12-2021"`)  
+  - `period`: string (optional, e.g., `"3mo"`)  
+  - `as_dataframe`: boolean (optional, e.g., `false`)  
+- **Number of Inputs**: 1 to 5  
+- **Input Format**: Dictionary (e.g., `{"scheme_code": "0P0000XVAA", "period": "3mo", "as_dataframe": false}`)
+
+---
+
+### 30 Calculate_MF_Balance_Units_Value  
+- **Purpose**: Calculate the current market value of held units for a mutual fund scheme.  
+- **Input**:  
+  - `scheme_code`: string (e.g., `"119597"`)  
+  - `units`: float (e.g., `445.804`)  
+- **Number of Inputs**: 2  
+- **Input Format**: Dictionary (e.g., `{"scheme_code": "119597", "units": 445.804}`)
+
+---
+
+### 31 Calculate_MF_Returns  
+- **Purpose**: Calculate absolute and IRR annualised returns for a mutual fund scheme.  
+- **Input**:  
+  - `scheme_code`: string (e.g., `"119062"`)  
+  - `balanced_units`: float (e.g., `1718.925`)  
+  - `monthly_sip`: float (e.g., `2000`)  
+  - `investment_in_months`: integer (e.g., `51`)  
+- **Number of Inputs**: 4  
+- **Input Format**: Dictionary (e.g., `{"scheme_code": "119062", "balanced_units": 1718.925, "monthly_sip": 2000, "investment_in_months": 51}`)
+
+---
+
+### 32 Get_MF_Open_Ended_Equity_Performance  
+- **Purpose**: Retrieve daily performance data of open-ended equity mutual fund schemes.  
+- **Input**:  
+  - `as_json`: boolean (optional, e.g., `true`)  
+- **Number of Inputs**: 0 to 1  
+- **Input Format**: Dictionary (e.g., `{"as_json": true}`)
+
+---
+
+### 33 Get_MF_Open_Ended_Debt_Performance  
+- **Purpose**: Retrieve daily performance data of open-ended debt mutual fund schemes.  
+- **Input**:  
+  - `as_json`: boolean (optional, e.g., `true`)  
+- **Number of Inputs**: 0 to 1  
+- **Input Format**: Dictionary (e.g., `{"as_json": true}`)
+
+---
+
+### 34 Get_MF_Open_Ended_Hybrid_Performance  
+- **Purpose**: Retrieve daily performance data of open-ended hybrid mutual fund schemes.  
+- **Input**:  
+  - `as_json`: boolean (optional, e.g., `true`)  
+- **Number of Inputs**: 0 to 1  
+- **Input Format**: Dictionary (e.g., `{"as_json": true}`)
+
+---
+
+### 35 Get_MF_Open_Ended_Solution_Performance  
+- **Purpose**: Retrieve daily performance data of open-ended solution mutual fund schemes.  
+- **Input**:  
+  - `as_json`: boolean (optional, e.g., `true`)  
+- **Number of Inputs**: 0 to 1  
+- **Input Format**: Dictionary (e.g., `{"as_json": true}`)
+
+---
+
+### 36 Get_All_MF_AMC_Profiles  
+- **Purpose**: Retrieve profile data of all mutual fund AMCs.  
+- **Input**:  
+  - `as_json`: boolean (optional, e.g., `true`)  
+- **Number of Inputs**: 0 to 1  
+- **Input Format**: Dictionary (e.g., `{"as_json": true}`)
 
 ---
 

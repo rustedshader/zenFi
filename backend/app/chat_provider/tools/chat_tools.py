@@ -12,7 +12,6 @@ from nselib.capital_market import (
     market_watch_all_indices,
     financial_results_for_equity,
 )
-
 from nselib.derivatives import (
     future_price_volume_data,
     option_price_volume_data,
@@ -24,11 +23,11 @@ from nselib.derivatives import (
     expiry_dates_option_index,
     nse_live_option_chain,
 )
-
 import yfinance as yf
-
-
 from langchain_community.document_loaders import YoutubeLoader
+
+# Import the mftool library for Mutual Funds data in India
+from mftool import Mftool
 
 
 class ChatTools:
@@ -46,6 +45,9 @@ class ChatTools:
         self.brave_search = brave_search
         self.youtube_search = youtube_search
         self.youtube_captioner = YouTubeSearchTool
+
+        # Initialize mftool for mutual funds data
+        self.mftool = Mftool()
 
     def get_youtube_captions(self, video_ids: list[str]):
         """Retrieve captions and video info for a list of YouTube video IDs."""
@@ -271,14 +273,6 @@ class ChatTools:
         except Exception as e:
             return f"Error retrieving market watch data: {str(e)}"
 
-    # def get_fii_dii_trading_activity(self):
-    #     """Retrieve FII and DII trading activity data."""
-    #     try:
-    #         df = fii_dii_trading_activity()
-    #         return df.to_string(index=False)
-    #     except Exception as e:
-    #         return f"Error retrieving FII/DII trading activity: {str(e)}"
-
     def get_financial_results_for_equity(
         self,
         from_date: str = None,
@@ -388,3 +382,236 @@ class ChatTools:
             return df.to_string(index=False)
         except Exception as e:
             return f"Error retrieving live option chain: {str(e)}"
+
+    # -------------------------------
+    # New Methods for mftool (Mutual Funds Data)
+    # -------------------------------
+
+    def get_mf_available_schemes(self, amc: str):
+        """
+        Retrieve all available schemes for a given AMC.
+        Args:
+            amc (str): The AMC name (e.g., 'ICICI').
+        Returns:
+            str: A string representation of the available schemes dictionary.
+        """
+        try:
+            result = self.mftool.get_available_schemes(amc)
+            return str(result)
+        except Exception as e:
+            return f"Error retrieving available schemes for {amc}: {str(e)}"
+
+    def get_mf_quote(self, scheme_code, as_json: bool = False):
+        """
+        Retrieve the latest quote for a given mutual fund scheme.
+        Args:
+            scheme_code (str/int): The scheme code.
+            as_json (bool): If True, return the result in JSON format.
+        Returns:
+            str: The scheme quote data.
+        """
+        try:
+            result = self.mftool.get_scheme_quote(str(scheme_code), as_json=as_json)
+            return str(result)
+        except Exception as e:
+            return f"Error retrieving scheme quote for {scheme_code}: {str(e)}"
+
+    def get_mf_details(self, scheme_code, as_json: bool = False):
+        """
+        Retrieve scheme details for a given mutual fund scheme.
+        Args:
+            scheme_code (str/int): The scheme code.
+            as_json (bool): If True, return the result in JSON format.
+        Returns:
+            str: The scheme details.
+        """
+        try:
+            result = self.mftool.get_scheme_details(str(scheme_code))
+            if as_json:
+                # Assuming get_scheme_info supports json output for more details.
+                result = self.mftool.get_scheme_info(str(scheme_code), as_json=True)
+            return str(result)
+        except Exception as e:
+            return f"Error retrieving scheme details for {scheme_code}: {str(e)}"
+
+    def get_mf_codes(self, as_json: bool = False):
+        """
+        Retrieve a dictionary of all mutual fund scheme codes and their names.
+        Args:
+            as_json (bool): If True, return the result in JSON format.
+        Returns:
+            str: The scheme codes dictionary.
+        """
+        try:
+            result = (
+                self.mftool.get_scheme_codes()
+                if not as_json
+                else self.mftool.get_scheme_codes(as_json=True)
+            )
+            return str(result)
+        except Exception as e:
+            return f"Error retrieving scheme codes: {str(e)}"
+
+    def get_mf_historical_nav(
+        self, scheme_code, as_json: bool = False, as_dataframe: bool = False
+    ):
+        """
+        Retrieve historical NAV data for a given scheme.
+        Args:
+            scheme_code (str/int): The scheme code.
+            as_json (bool): If True, return the data in JSON format.
+            as_dataframe (bool): If True, return the data as a DataFrame.
+        Returns:
+            str: The historical NAV data.
+        """
+        try:
+            result = self.mftool.get_scheme_historical_nav(
+                str(scheme_code), as_json=as_json, as_Dataframe=as_dataframe
+            )
+            return str(result)
+        except Exception as e:
+            return f"Error retrieving historical NAV for {scheme_code}: {str(e)}"
+
+    def mf_history(
+        self,
+        scheme_code,
+        start: str = None,
+        end: str = None,
+        period: str = None,
+        as_dataframe: bool = False,
+    ):
+        """
+        Retrieve historical NAV data with one day change using mf.history().
+        Args:
+            scheme_code (str/int): The scheme code.
+            start (str): Start date (optional).
+            end (str): End date (optional).
+            period (str): Period (e.g., '3mo').
+            as_dataframe (bool): If True, return as DataFrame.
+        Returns:
+            str: Historical NAV data.
+        """
+        try:
+            result = self.mftool.history(
+                str(scheme_code),
+                start=start,
+                end=end,
+                period=period,
+                as_dataframe=as_dataframe,
+            )
+            return str(result)
+        except Exception as e:
+            return f"Error retrieving historical data for {scheme_code}: {str(e)}"
+
+    def calculate_balance_units_value(self, scheme_code, units: float):
+        """
+        Calculate the current market value of the given number of units for a scheme.
+        Args:
+            scheme_code (str/int): The scheme code.
+            units (float): Number of units held.
+        Returns:
+            str: Market value details.
+        """
+        try:
+            result = self.mftool.calculate_balance_units_value(str(scheme_code), units)
+            return str(result)
+        except Exception as e:
+            return f"Error calculating balance units value for {scheme_code}: {str(e)}"
+
+    def calculate_returns(
+        self,
+        scheme_code,
+        balanced_units: float,
+        monthly_sip: float,
+        investment_in_months: int,
+    ):
+        """
+        Calculate the absolute and IRR annualised returns.
+        Args:
+            scheme_code (str/int): The scheme code.
+            balanced_units (float): Units balance.
+            monthly_sip (float): Monthly SIP amount.
+            investment_in_months (int): Investment duration in months.
+        Returns:
+            str: Returns calculation details.
+        """
+        try:
+            result = self.mftool.calculate_returns(
+                code=str(scheme_code),
+                balanced_units=balanced_units,
+                monthly_sip=monthly_sip,
+                investment_in_months=investment_in_months,
+            )
+            return str(result)
+        except Exception as e:
+            return f"Error calculating returns for {scheme_code}: {str(e)}"
+
+    def get_open_ended_equity_scheme_performance(self, as_json: bool = True):
+        """
+        Retrieve daily performance of open ended equity schemes.
+        Args:
+            as_json (bool): If True, return data in JSON format.
+        Returns:
+            str: Performance data.
+        """
+        try:
+            result = self.mftool.get_open_ended_equity_scheme_performance(as_json)
+            return str(result)
+        except Exception as e:
+            return f"Error retrieving equity scheme performance: {str(e)}"
+
+    def get_open_ended_debt_scheme_performance(self, as_json: bool = True):
+        """
+        Retrieve daily performance of open ended debt schemes.
+        Args:
+            as_json (bool): If True, return data in JSON format.
+        Returns:
+            str: Performance data.
+        """
+        try:
+            result = self.mftool.get_open_ended_debt_scheme_performance(as_json)
+            return str(result)
+        except Exception as e:
+            return f"Error retrieving debt scheme performance: {str(e)}"
+
+    def get_open_ended_hybrid_scheme_performance(self, as_json: bool = True):
+        """
+        Retrieve daily performance of open ended hybrid schemes.
+        Args:
+            as_json (bool): If True, return data in JSON format.
+        Returns:
+            str: Performance data.
+        """
+        try:
+            result = self.mftool.get_open_ended_hybrid_scheme_performance(as_json)
+            return str(result)
+        except Exception as e:
+            return f"Error retrieving hybrid scheme performance: {str(e)}"
+
+    def get_open_ended_solution_scheme_performance(self, as_json: bool = True):
+        """
+        Retrieve daily performance of open ended solution schemes.
+        Args:
+            as_json (bool): If True, return data in JSON format.
+        Returns:
+            str: Performance data.
+        """
+        try:
+            result = self.mftool.get_open_ended_solution_scheme_performance(as_json)
+            return str(result)
+        except Exception as e:
+            return f"Error retrieving solution scheme performance: {str(e)}"
+
+    def get_all_amc_profiles(self, as_json: bool = True):
+        """
+        Retrieve profile data of all AMCs.
+        Args:
+            as_json (bool): If True, return data in JSON format.
+        Returns:
+            str: AMC profiles.
+        """
+        try:
+            result = self.mftool.get_all_amc_profiles(as_json)
+            return str(result)
+        except Exception as e:
+            return f"Error retrieving AMC profiles: {str(e)}"
