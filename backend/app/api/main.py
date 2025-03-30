@@ -34,12 +34,16 @@ from langchain_google_genai import (
 from langchain_community.tools.tavily_search import TavilySearchResults
 from langchain_community.tools import BraveSearch
 from app.chat_provider.service.chat_service import ChatService
+from redis.asyncio import Redis
+
 
 # Load environment variables
 load_dotenv()
 
+
 # Initialize FastAPI app
 app = FastAPI()
+
 
 # Add CORS middleware
 app.add_middleware(
@@ -50,13 +54,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+redis_client = Redis.from_url(redis_url, decode_responses=True)
+
 
 # Database Connection
 def connect_tcp_socket() -> sqlalchemy.engine.base.Engine:
     """Initializes a TCP connection pool for a Cloud SQL instance of Postgres."""
-    db_host = os.environ.get("INSTANCE_HOST", "34.131.174.172")
+    db_host = os.environ.get("INSTANCE_HOST", "some-db-ip")
     db_user = os.environ.get("DB_USER", "postgres")
-    db_pass = os.environ.get("DB_PASS", "AVgmUCBkYz,sM21}")
+    db_pass = os.environ.get("DB_PASS", "some-db-password")
     db_name = os.environ.get("DB_NAME", "postgres")
     db_port = os.environ.get("DB_PORT", "5432")
 
@@ -83,8 +90,8 @@ engine = create_async_engine(
     sqlalchemy.engine.url.URL.create(
         drivername="postgresql+asyncpg",
         username=os.environ.get("DB_USER", "postgres"),
-        password=os.environ.get("DB_PASS", "AVgmUCBkYz,sM21}"),
-        host=os.environ.get("INSTANCE_HOST", "34.131.174.172"),
+        password=os.environ.get("DB_PASS", "some-password"),
+        host=os.environ.get("INSTANCE_HOST", "some-dp-ip"),
         port=os.environ.get("DB_PORT", "5432"),
         database=os.environ.get("DB_NAME", "postgres"),
     ),
@@ -140,13 +147,14 @@ def verify_password(plain_password, hashed_password):
 
 
 # JWT Configuration
-SECRET_KEY = os.environ.get("SECRET_KEY", "your-secret-key")
+SECRET_KEY = os.environ.get("SECRET_KEY", "some-secrey-key")
 ALGORITHM = "HS256"
+JWT_EXPIRE_TIME = int(os.environ.get("JWT_EXPIRE_TIME", 15))
 
 
 def create_access_token(data: dict, expires_delta: timedelta = None):
     to_encode = data.copy()
-    expire = datetime.utcnow() + (expires_delta or timedelta(minutes=15))
+    expire = datetime.utcnow() + (expires_delta or timedelta(minutes=JWT_EXPIRE_TIME))
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
@@ -293,6 +301,49 @@ class ChatServiceManager:
             yield f"Error: {str(e)}"
 
 
+async def get_chat_history(
+    session_id: str, db: AsyncSession, force_db: bool = False
+) -> List[dict]:
+    """
+    Retrieve chat history for a session, using Redis cache when available.
+
+    Args:
+        session_id: The session UUID as a string.
+        db: The database session.
+        force_db: If True, bypass Redis and fetch from the database.
+
+    Returns:
+        List of message dictionaries with sender, message, and timestamp.
+    """
+    cache_key = f"chat_history:{session_id}"
+
+    # Try Redis first unless forced to use database
+    if not force_db:
+        history_json = await redis_client.get(cache_key)
+        if history_json:
+            return json.loads(history_json)
+
+    # Fetch from database
+    stmt = (
+        select(ChatMessage)
+        .where(ChatMessage.session_id == uuid_UUID(session_id))
+        .order_by(ChatMessage.timestamp)
+    )
+    result = await db.execute(stmt)
+    chat_history = [
+        {
+            "sender": msg.sender,
+            "message": msg.message,
+            "timestamp": msg.timestamp.isoformat(),
+        }
+        for msg in result.scalars().all()
+    ]
+
+    # Cache in Redis with a TTL of 5 minutes (300 seconds)
+    await redis_client.set(cache_key, json.dumps(chat_history), ex=300)
+    return chat_history
+
+
 chat_service_manager = ChatServiceManager()
 
 # Endpoints
@@ -358,7 +409,6 @@ async def send_message(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    # Convert session_id to UUID
     try:
         session_uuid = uuid_UUID(input_data.session_id)
     except ValueError:
@@ -384,23 +434,10 @@ async def send_message(
     db.add(user_message)
     await db.commit()
 
-    # Retrieve complete conversation history for context
-    stmt = (
-        select(ChatMessage)
-        .where(ChatMessage.session_id == session.id)
-        .order_by(ChatMessage.timestamp)
-    )
-    result = await db.execute(stmt)
-    chat_history = [
-        {
-            "sender": msg.sender,
-            "message": msg.message,
-            "timestamp": msg.timestamp.isoformat(),
-        }
-        for msg in result.scalars().all()
-    ]
+    # Retrieve chat history with Redis caching
+    chat_history = await get_chat_history(input_data.session_id, db)
 
-    # Process the message along with session history
+    # Process the message
     response = await chat_service_manager.process_message(
         input_data.session_id, input_data.message, chat_history
     )
@@ -415,6 +452,10 @@ async def send_message(
     )
     db.add(bot_message)
     await db.commit()
+
+    # Update Redis cache with the latest history
+    await get_chat_history(input_data.session_id, db, force_db=True)
+
     return response
 
 
@@ -449,39 +490,23 @@ async def stream_chat(
     db.add(user_message)
     await db.commit()
 
-    # Retrieve conversation history for context
-    stmt = (
-        select(ChatMessage)
-        .where(ChatMessage.session_id == session.id)
-        .order_by(ChatMessage.timestamp)
-    )
-    result = await db.execute(stmt)
-    chat_history = [
-        {
-            "sender": msg.sender,
-            "message": msg.message,
-            "timestamp": msg.timestamp.isoformat(),
-        }
-        for msg in result.scalars().all()
-    ]
+    # Retrieve chat history with Redis caching
+    chat_history = await get_chat_history(input_data.session_id, db)
 
     async def stream_generator():
         full_response = ""
         sources = []
         try:
-            # Add a heartbeat to keep the connection alive
             yield 'data: {"type":"heartbeat"}\n\n'
 
             async for token in chat_service_manager.stream_message(
                 input_data.session_id, input_data.message, chat_history
             ):
                 if token:
-                    # Split the token into parts that include whitespace
                     parts = re.split(r"(\s+)", token)
                     for part in parts:
-                        if part:  # Ensure part is not empty
+                        if part:
                             full_response += part
-                            # Yield each part individually, preserving whitespace (including newlines)
                             yield f'data: {{"type":"token","content":{json.dumps(part)}}}\n\n'
                             await asyncio.sleep(0.01)
 
@@ -496,19 +521,16 @@ async def stream_chat(
             db.add(bot_message)
             await db.commit()
 
-            # Send completion message
+            # Update Redis cache
+            await get_chat_history(input_data.session_id, db, force_db=True)
+
             yield 'data: {"type":"complete","finishReason":"stop"}\n\n'
 
         except asyncio.CancelledError:
-            # Handle client disconnection gracefully
             yield 'data: {"type":"error","finishReason":"cancelled"}\n\n'
         except Exception as e:
-            # Log the error for debugging
             print(f"Streaming error: {str(e)}")
             yield f'data: {{"type":"error","finishReason":"error","error":{json.dumps(str(e))}}}\n\n'
-        finally:
-            # Cleanup any resources if needed
-            pass
 
     return StreamingResponse(
         stream_generator(),
@@ -516,7 +538,7 @@ async def stream_chat(
         headers={
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",  # Disable nginx buffering
+            "X-Accel-Buffering": "no",
         },
     )
 
@@ -527,7 +549,7 @@ async def health_check():
 
 
 @app.get("/chat/history")
-async def get_chat_history(
+async def get_chat_history_endpoint(
     session_id: str,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -537,7 +559,6 @@ async def get_chat_history(
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid session id format")
 
-    # Verify session belongs to current user
     stmt = select(ChatSession).where(
         ChatSession.id == session_uuid, ChatSession.user_id == current_user.id
     )
@@ -548,28 +569,29 @@ async def get_chat_history(
             status_code=404, detail="Session not found or not authorized"
         )
 
-    # Get all messages for this session
-    stmt = (
-        select(ChatMessage)
-        .where(ChatMessage.session_id == session_uuid)
-        .order_by(ChatMessage.timestamp)
-    )
-    result = await db.execute(stmt)
-    messages = result.scalars().all()
+    # Get chat history with Redis caching
+    chat_history = await get_chat_history(session_id, db)
 
-    # Format messages for response
-    chat_history = [
+    # Format for response
+    formatted_history = [
         {
-            "id": str(msg.id),
-            "role": "user" if msg.sender == "user" else "assistant",
-            "content": msg.message,
-            "timestamp": msg.timestamp.isoformat(),
-            "sources": msg.sources,
+            "id": str(
+                uuid.uuid4()
+            ),  # Generate a temporary ID since we fetch from cache
+            "role": "user" if msg["sender"] == "user" else "assistant",
+            "content": msg["message"],
+            "timestamp": msg["timestamp"],
+            "sources": msg.get("sources", []),
         }
-        for msg in messages
+        for msg in chat_history
     ]
 
-    return chat_history
+    return formatted_history
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    await redis_client.close()
 
 
 if __name__ == "__main__":

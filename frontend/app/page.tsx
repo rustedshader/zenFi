@@ -87,8 +87,8 @@ export default function Page() {
       <div className="flex-1 flex items-center justify-center p-24">
         <div className="w-full max-w-3xl space-y-8">
           <div className="text-center">
-            <h1 className="text-2xl font-bold">Welcome to Chat</h1>
-            <p className="mt-2 text-gray-600">Start a new conversation</p>
+            <h1 className="text-2xl font-bold">Welcome to Zenfi AI</h1>
+            <p className="mt-2 text-gray-600">Start your finance journey ! </p>
           </div>
         </div>
       </div>

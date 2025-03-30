@@ -16,7 +16,7 @@ export default function Header() {
   return (
     <header className="p-4 flex justify-between items-center">
       <Link href="/" className="flex items-center gap-2">
-        <h1 className="text-xl font-bold">FinanceAI</h1>
+        <h1 className="text-xl font-bold">Zenfi AI</h1>
       </Link>
       <div className="flex items-center gap-2">
         {isLoggedIn ? (

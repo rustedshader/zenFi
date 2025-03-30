@@ -25,22 +25,6 @@ from langchain_core.messages import AIMessage
 from app.chat_provider.tools.stock_market_tools import StockAnalysisService
 
 
-"""
-TOADD:
-
-Added IF Date is given then its of year 2025 you don't have to search of past.
-
-If user is asking for best stocks to invest in parse todays date too.
-
-In indian stocks add .NS in end
-
-Implement advanced calculations to predict stocks prices. Use advanced finance math
-
-Add Youtube Finance News Channel Transcript To DB
-
-"""
-
-
 class State(TypedDict):
     messages: Annotated[list, add_messages]
 
@@ -124,6 +108,10 @@ class WebResearchInput(BaseModel):
 
 class MFAvailableSchemesInput(BaseModel):
     amc: str = Field(..., description="AMC name, e.g., 'ICICI'")
+
+
+class WebScrapeInput(BaseModel):
+    url: str = Field(..., description="URL to scrape data from")
 
 
 class MFQuoteInput(BaseModel):
@@ -258,6 +246,13 @@ class ChatService:
             name="Get_Youtube_Captions",
             func=self.chat_tools.get_youtube_captions,
             description="Retrieve captions and additional info for a list of YouTube video IDs. Input should be a list of video IDs (e.g., ['dQw4w9WgXcQ']).",
+        )
+
+        self.scrape_web_url = StructuredTool.from_function(
+            name="Scrape_Web_URL",
+            func=self.chat_tools.scrape_web_url,
+            description="Retrieve data from a specific URL. Input should be a valid URL string.",
+            args_schema=WebScrapeInput,
         )
 
         self.repl_tool = Tool(
@@ -506,6 +501,7 @@ class ChatService:
             self.mf_open_ended_hybrid_tool,
             self.mf_open_ended_solution_tool,
             self.mf_all_amc_profiles_tool,
+            self.scrape_web_url,
         ]
 
         # Initialize state with system message (using the previous system message)
@@ -582,6 +578,7 @@ class ChatService:
 - Use *python_repl* for mathematical calculations by providing Python code as a string (e.g., "import pandas as pd; data = [100, 110, 105]; pd.Series(data).mean()"). Parse Python code to apply financial formulas and analyze stock data for better advice. Never give code in the output. Perform and execute the python code and display result.
 - Use *Wikipedia_Search* to search Wikipedia. Always try to use it for verifying facts and informations. If you have ever trouble finding correct company alias you can refer to this wikepdia page List_of_companies_listed_on_the_National_Stock_Exchange_of_India 
 - Use *Get_Youtube_Captions* to get captions/subtitles of a youtube video. Schema You have to parse is list of strings of youtube ids ["xyz","abc"]
+- Use *Scrape_Web_URL* to get data from a specific URL. Input should be a valid URL string. Use this for getting data of websites , blogs , news articles which are needed for better financial analysis.
 
 Please execute the following steps and provide the final output. Do not just list the steps; actually perform the calculations and actions required
 
@@ -875,6 +872,12 @@ This pipeline is tailored for a specific query like "Should I invest in Reliance
 
 **Retry Logic**
 Your goal is to parse the data successfully, attempting up to 5 times if necessary, fixing any errors you encounter each time. If one approach or tool doesn’t yield the best results, try a different one. After successfully parsing the data, refine the output to provide the best possible result to the user.
+
+When you call a tool, if you receive a ToolMessage indicating an error (e.g., "Error executing tool 'ToolName': error details"), follow these steps:
+1. Analyze the error message to understand what went wrong (e.g., invalid parameter, wrong format).
+2. Correct the tool call parameters based on the error (e.g., fix a date format, use a valid stock symbol).
+3. Retry the tool call with the corrected parameters.
+4. Do not repeat the same mistake more than twice. If the error persists after two retries, inform the user: "I encountered an issue with the tool [ToolName]: [error details]. Please check your input or try again later."
 
 #### Steps to Follow:
 
@@ -1269,6 +1272,14 @@ The following schema details the tools available to the AI financial assistant, 
 - **Number of Inputs**: 0 to 1  
 - **Input Format**: Dictionary (e.g., `{"as_json": true}`)
 
+### 38 Scrape_Web_URL
+- **Purpose**: Scrape web pages for financial data.
+- **Input**:
+    - `url`: string (e.g., "https://www.moneycontrol.com")
+- **Number of Inputs**: 1
+- **Input Format**: Dictionary (e.g., `{"url": "https://www.moneycontrol.com"}`)
+- **Output Format**: Dictionary (e.g., `{"data": "scraped data"}`)
+- **Output Data Type**: string
 ---
 
 ## Notes on the Schema
@@ -1505,15 +1516,21 @@ The following schema details the tools available to the AI financial assistant, 
         return {"messages": [response]}
 
     def tools_node(self, state: State):
-        """Execute tool calls and return results."""
+        """Execute tool calls and return results, handling errors for retry."""
         last_message = state["messages"][-1]
         tool_results = []
         for tool_call in last_message.tool_calls:
-            tool = next(t for t in self.tools if t.name == tool_call["name"])
-            result = tool.invoke(tool_call["args"])
-            tool_results.append(
-                ToolMessage(content=str(result), tool_call_id=tool_call["id"])
-            )
+            try:
+                tool = next(t for t in self.tools if t.name == tool_call["name"])
+                result = tool.invoke(tool_call["args"])
+                tool_results.append(
+                    ToolMessage(content=str(result), tool_call_id=tool_call["id"])
+                )
+            except Exception as e:
+                error_message = f"Error executing tool '{tool_call['name']}': {str(e)}"
+                tool_results.append(
+                    ToolMessage(content=error_message, tool_call_id=tool_call["id"])
+                )
         return {"messages": tool_results}
 
     def route_tools(self, state: State):

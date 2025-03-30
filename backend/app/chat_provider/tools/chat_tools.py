@@ -1,5 +1,5 @@
 import time
-
+from langchain_community.document_loaders import WebBaseLoader
 from langchain_community.document_loaders import WikipediaLoader
 from langchain_community.utilities import SearxSearchWrapper
 from langchain_community.tools import BraveSearch
@@ -207,6 +207,36 @@ class ChatTools:
             return "\n\n".join([str(result) for result in unique_results])
         else:
             return "No search results found."
+
+    def scrape_web_url(self, url: str) -> str:
+        """
+        Scrape content from a given URL.
+
+        Args:
+            url (str): The URL to scrape.
+
+        Returns:
+            str: The scraped content or error message.
+        """
+        try:
+            # Validate URL
+            if not url.startswith(("http://", "https://")):
+                return "Error: Invalid URL. Must start with http:// or https://"
+
+            # Load and parse the URL
+            loader = WebBaseLoader(url)
+            docs = loader.load()
+
+            # Check if any content was retrieved
+            if not docs:
+                return "Error: No content found at the URL"
+
+            return docs[0].page_content
+
+        except ValueError as e:
+            return f"URL Error: {str(e)}"
+        except Exception as e:
+            return f"Error scraping URL {url}: {str(e)}"
 
     def get_stock_prices(self, symbol: str):
         """

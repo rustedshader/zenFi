@@ -14,12 +14,12 @@ const fontSans = FontSans({
   variable: '--font-sans'
 })
 
-const title = 'Some Finance AI'
+const title = 'Zenfi AI'
 const description =
   'A finance AI that helps you manage your money, investments, and more.'
 
 export const metadata: Metadata = {
-  metadataBase: new URL('https://financeai.sh'),
+  metadataBase: new URL('https://zenfi.in'),
   title,
   description,
   openGraph: { title, description },
