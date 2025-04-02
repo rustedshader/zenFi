@@ -63,7 +63,8 @@ export function ChatPanel({
               onChange={handleInputChange}
               onCompositionStart={() => setIsComposing(true)}
               onCompositionEnd={() => setIsComposing(false)}
-              className="w-full resize-none bg-transparent text-gray-900 placeholder:text-gray-500 focus:outline-none py-3 sm:py-5 px-3 sm:px-5 pr-12 text-sm sm:text-base"
+              disabled={isLoading}
+              className="w-full resize-none bg-transparent text-gray-900 placeholder:text-gray-500 focus:outline-none py-3 sm:py-5 px-3 sm:px-5 pr-12 text-sm sm:text-base disabled:opacity-50 disabled:cursor-not-allowed"
               onKeyDown={e => {
                 if (e.key === 'Enter' && !e.shiftKey && !isComposing) {
                   e.preventDefault()
