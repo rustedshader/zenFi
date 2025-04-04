@@ -24,21 +24,24 @@ export function LoginForm() {
       })
 
       if (response.ok) {
-        toast.success('Logged in successfully')
         login() // Update auth state
+        toast.success('Logged in successfully')
 
-        // Wait a small delay to ensure cookie is set
-        await new Promise(resolve => setTimeout(resolve, 100))
-
-        // Verify cookie is set before redirecting
-        const token = document.cookie
-          .split('; ')
-          .find(row => row.startsWith('jwt_token='))
-
-        if (token) {
+        // Use a combination of approaches for more reliable redirection
+        try {
+          // First try the router
           router.push('/')
-        } else {
-          toast.error('Login failed - please try again')
+
+          // As a fallback, also set a timeout to use window.location
+          setTimeout(() => {
+            if (window.location.pathname === '/login') {
+              window.location.href = '/'
+            }
+          }, 500)
+        } catch (navError) {
+          console.error('Navigation error:', navError)
+          // Fallback to window.location
+          window.location.href = '/'
         }
       } else {
         const { error } = await response.json()
