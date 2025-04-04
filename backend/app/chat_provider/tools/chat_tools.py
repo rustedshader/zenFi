@@ -6,10 +6,6 @@ from langchain_community.tools import BraveSearch
 from langchain_community.tools import DuckDuckGoSearchResults
 from langchain_community.tools import YouTubeSearchTool
 from nselib.capital_market import (
-    price_volume_and_deliverable_position_data,
-    index_data,
-    bhav_copy_with_delivery,
-    equity_list,
     fno_equity_list,
     market_watch_all_indices,
     financial_results_for_equity,
@@ -25,10 +21,34 @@ from nselib.derivatives import (
     expiry_dates_option_index,
     nse_live_option_chain,
 )
+import requests
 import yfinance as yf
 from langchain_community.document_loaders import YoutubeLoader
+import pandas as pd
+import logging
+import datetime as dt
+from io import BytesIO, StringIO
+from nselib.libutil import (
+    validate_date_param,
+    derive_from_and_to_date,
+    cleaning_nse_symbol,
+    nse_urlfetch,
+    cleaning_column_name,
+)
+from nselib.constants import (
+    price_volume_and_deliverable_position_data_columns,
+    dd_mm_yyyy,
+    index_data_columns,
+)
+import xml.etree.ElementTree as ET
 
 from mftool import Mftool
+
+logging.basicConfig(level=logging.INFO)
+
+
+class NSEDataNotFound(Exception):
+    pass
 
 
 class ChatTools:
@@ -258,7 +278,40 @@ class ChatTools:
         except Exception as e:
             return f"Error retrieving stock information for {symbol}: {str(e)}"
 
-    # New NSE data methods
+    # -------- New NSE data methods --------
+
+    def get_price_volume_and_deliverable_position_data(
+        self, symbol: str, from_date: str, to_date: str
+    ):
+        """
+        Fetch price, volume, and deliverable data for a symbol between two dates.
+
+        Args:
+            symbol (str): Stock symbol (e.g., "SBIN").
+            from_date (str): Start date in "dd-mm-YYYY" format.
+            to_date (str): End date in "dd-mm-YYYY" format.
+
+        Returns:
+            pd.DataFrame: DataFrame with the fetched data.
+
+        Raises:
+            NSEDataNotFound: If data cannot be fetched from NSE.
+        """
+        origin_url = "https://www.nseindia.com/report-detail/eq_security"
+        url = "https://www.nseindia.com/api/historical/securityArchives?"
+        payload = f"from={from_date}&to={to_date}&symbol={symbol}&dataType=priceVolumeDeliverable&series=ALL&csv=true"
+
+        response = nse_urlfetch(url + payload, origin_url=origin_url)
+        if response.status_code != 200:
+            raise NSEDataNotFound(
+                f"Failed to fetch data for {symbol} from {from_date} to {to_date}: Status {response.status_code}"
+            )
+
+        data_text = response.text.replace("\x82", "").replace("â¹", "In Rs")
+        data_df = pd.read_csv(StringIO(data_text))
+        data_df.columns = [name.replace(" ", "") for name in data_df.columns]
+        return data_df
+
     def get_price_volume_and_deliverable_data(
         self,
         symbol: str,
@@ -266,73 +319,292 @@ class ChatTools:
         to_date: str = None,
         period: str = None,
     ):
-        """Retrieve price, volume, and deliverable position data for a stock."""
+        """
+        Retrieve historical price, volume, and deliverable data for a stock.
+
+        Args:
+            symbol (str): Stock symbol (e.g., "SBIN").
+            from_date (str, optional): Start date in "dd-mm-YYYY" format.
+            to_date (str, optional): End date in "dd-mm-YYYY" format.
+            period (str, optional): Period like "1D", "1W", "1M", "6M", "1Y".
+
+        Returns:
+            pd.DataFrame: DataFrame containing the data.
+
+        Raises:
+            ValueError: If date parameters are invalid.
+            NSEDataNotFound: If data fetch fails.
+
+        Example:
+            nse.get_price_volume_and_deliverable_data(symbol="SBIN", period="1M")
+        """
         try:
-            df = price_volume_and_deliverable_position_data(
-                symbol, from_date, to_date, period
+            logging.info(f"Fetching price/volume/deliverable data for {symbol}")
+            validate_date_param(from_date, to_date, period)
+            symbol = cleaning_nse_symbol(symbol)
+            from_date, to_date = derive_from_and_to_date(from_date, to_date, period)
+
+            from_date_dt = dt.datetime.strptime(from_date, dd_mm_yyyy)
+            to_date_dt = dt.datetime.strptime(to_date, dd_mm_yyyy)
+            nse_df = pd.DataFrame(
+                columns=price_volume_and_deliverable_position_data_columns
             )
-            return df.to_string(index=False)
+
+            load_days = (to_date_dt - from_date_dt).days
+            while load_days > 0:
+                end_date_dt = from_date_dt + dt.timedelta(days=min(364, load_days))
+                start_date = from_date_dt.strftime(dd_mm_yyyy)
+                end_date = end_date_dt.strftime(dd_mm_yyyy)
+
+                data_df = self.get_price_volume_and_deliverable_position_data(
+                    symbol, start_date, end_date
+                )
+                if not data_df.empty:
+                    nse_df = pd.concat([nse_df, data_df], ignore_index=True)
+
+                from_date_dt = end_date_dt + dt.timedelta(days=1)
+                load_days = (to_date_dt - from_date_dt).days
+
+            # Clean numeric columns
+            for col in [
+                "TotalTradedQuantity",
+                "TurnoverInRs",
+                "No.ofTrades",
+                "DeliverableQty",
+            ]:
+                if col in nse_df.columns:
+                    nse_df[col] = pd.to_numeric(
+                        nse_df[col].str.replace(",", ""), errors="coerce"
+                    )
+
+            return nse_df.to_json()
+
         except Exception as e:
-            return f"Error retrieving price, volume, and deliverable data: {str(e)}"
+            logging.error(f"Error in get_price_volume_and_deliverable_data: {str(e)}")
+            raise
 
     def get_index_data(
         self, index: str, from_date: str = None, to_date: str = None, period: str = None
     ):
-        """Retrieve historical data for an NSE index."""
+        """
+        Retrieve historical data for an NSE index.
+
+        Args:
+            index (str): Index name (e.g., "NIFTY 50").
+            from_date (str, optional): Start date in "dd-mm-YYYY" format.
+            to_date (str, optional): End date in "dd-mm-YYYY" format.
+            period (str, optional): Period like "1D", "1W", "1M", "6M", "1Y".
+
+        Returns:
+            pd.DataFrame: DataFrame with index data.
+
+        Raises:
+            ValueError: If date parameters are invalid.
+            NSEDataNotFound: If data fetch fails.
+
+        Example:
+            nse.get_index_data(index="NIFTY 50", period="6M")
+        """
         try:
-            df = index_data(index, from_date, to_date, period)
-            return df.to_string(index=False)
+            logging.info(f"Fetching index data for {index}")
+            validate_date_param(from_date, to_date, period)
+            from_date, to_date = derive_from_and_to_date(from_date, to_date, period)
+
+            from_date_dt = dt.datetime.strptime(from_date, dd_mm_yyyy)
+            to_date_dt = dt.datetime.strptime(to_date, dd_mm_yyyy)
+            nse_df = pd.DataFrame(columns=index_data_columns)
+
+            load_days = (to_date_dt - from_date_dt).days
+            while load_days > 0:
+                end_date_dt = from_date_dt + dt.timedelta(days=min(364, load_days))
+                start_date = from_date_dt.strftime(dd_mm_yyyy)
+                end_date = end_date_dt.strftime(dd_mm_yyyy)
+
+                index_encoded = index.replace(" ", "%20").upper()
+                origin_url = (
+                    "https://www.nseindia.com/reports-indices-historical-index-data"
+                )
+                url = f"https://www.nseindia.com/api/historical/indicesHistory?indexType={index_encoded}&from={start_date}&to={end_date}"
+                response = nse_urlfetch(url, origin_url=origin_url)
+
+                if response.status_code != 200:
+                    raise NSEDataNotFound(
+                        f"Failed to fetch index data for {index}: Status {response.status_code}"
+                    )
+
+                data_json = response.json()
+                close_df = pd.DataFrame(
+                    data_json["data"]["indexCloseOnlineRecords"]
+                ).drop(columns=["_id", "EOD_TIMESTAMP"])
+                turnover_df = pd.DataFrame(
+                    data_json["data"]["indexTurnoverRecords"]
+                ).drop(columns=["_id", "HIT_INDEX_NAME_UPPER"])
+                data_df = pd.merge(close_df, turnover_df, on="TIMESTAMP", how="inner")
+                data_df.drop(columns="TIMESTAMP", inplace=True)
+                data_df.columns = cleaning_column_name(data_df.columns)
+
+                if not data_df.empty:
+                    nse_df = pd.concat([nse_df, data_df], ignore_index=True)
+
+                from_date_dt = end_date_dt + dt.timedelta(days=1)
+                load_days = (to_date_dt - from_date_dt).days
+
+            return nse_df.to_json()
+
         except Exception as e:
-            return f"Error retrieving index data: {str(e)}"
+            logging.error(f"Error in get_index_data: {str(e)}")
+            raise
 
     def get_bhav_copy_with_delivery(self, trade_date: str):
-        """Retrieve bhav copy with delivery data for a specific trade date."""
-        try:
-            df = bhav_copy_with_delivery(trade_date)
-            return df.to_string(index=False)
-        except Exception as e:
-            return f"Error retrieving bhav copy with delivery: {str(e)}"
+        """
+        Retrieve bhav copy with delivery data for a specific trade date.
 
-    def get_equity_list(self):
-        """Retrieve the list of all equities available to trade on NSE."""
-        try:
-            df = equity_list()
-            return df.to_string(index=False)
-        except Exception as e:
-            return f"Error retrieving equity list: {str(e)}"
+        Args:
+            trade_date (str): Date in "dd-mm-YYYY" format (e.g., "15-08-2023").
 
-    def get_fno_equity_list(self):
-        """Retrieve the list of derivative equities with lot sizes."""
-        try:
-            df = fno_equity_list()
-            return df.to_string(index=False)
-        except Exception as e:
-            return f"Error retrieving F&O equity list: {str(e)}"
+        Returns:
+            pd.DataFrame: DataFrame with bhav copy data.
 
-    def get_market_watch_all_indices(self):
-        """Retrieve market watch data for all NSE indices."""
+        Raises:
+            ValueError: If trade_date format is invalid.
+            NSEDataNotFound: If data is not available.
+
+        Example:
+            nse.get_bhav_copy_with_delivery(trade_date="15-08-2023")
+        """
         try:
-            df = market_watch_all_indices()
-            return df.to_string(index=False)
+            logging.info(f"Fetching bhav copy for {trade_date}")
+            trade_date_dt = dt.datetime.strptime(trade_date, dd_mm_yyyy)
+            use_date = trade_date_dt.strftime("%d%m%Y")
+            url = f"https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_{use_date}.csv"
+
+            response = nse_urlfetch(url)
+            if response.status_code != 200:
+                raise NSEDataNotFound(
+                    f"No bhav copy data available for {trade_date}: Status {response.status_code}"
+                )
+
+            bhav_df = pd.read_csv(BytesIO(response.content))
+            bhav_df.columns = [name.replace(" ", "") for name in bhav_df.columns]
+            bhav_df["SERIES"] = bhav_df["SERIES"].str.replace(" ", "")
+            bhav_df["DATE1"] = bhav_df["DATE1"].str.replace(" ", "")
+            return bhav_df.to_json()
+
+        except ValueError as e:
+            logging.error(f"Invalid date format: {str(e)}")
+            raise ValueError(f"trade_date must be in 'dd-mm-YYYY' format: {str(e)}")
         except Exception as e:
-            return f"Error retrieving market watch data: {str(e)}"
+            logging.error(f"Error in get_bhav_copy_with_delivery: {str(e)}")
+            raise
 
     def get_financial_results_for_equity(
         self,
+        symbol: str = None,
         from_date: str = None,
         to_date: str = None,
         period: str = None,
         fo_sec: bool = None,
         fin_period: str = "Quarterly",
-    ):
-        """Retrieve financial results for equities."""
+    ) -> str:
+        """
+        Retrieve financial results for equities, optionally filtered by symbol.
+
+        Args:
+            symbol (str, optional): Stock symbol (e.g., "RELIANCE"). If None, fetches for all equities.
+            from_date (str, optional): Start date in "dd-mm-YYYY" format.
+            to_date (str, optional): End date in "dd-mm-YYYY" format.
+            period (str, optional): Period like "1D", "1W", "1M", "6M", "1Y".
+            fo_sec (bool, optional): Filter for F&O securities if True.
+            fin_period (str): Financial period ("Quarterly", "Half-Yearly", "Annual", "Others").
+
+        Returns:
+            str: JSON string of financial results DataFrame.
+
+        Raises:
+            ValueError: If parameters are invalid.
+            NSEDataNotFound: If data fetch fails.
+
+        Example:
+            nse.get_financial_results_for_equity(symbol="RELIANCE", period="1M", fo_sec=True, fin_period="Quarterly")
+        """
         try:
-            df = financial_results_for_equity(
-                from_date, to_date, period, fo_sec, fin_period
+            logging.info(
+                f"Fetching financial results for symbol: {symbol or 'all'}, period: {fin_period}"
             )
-            return df.to_string(index=False)
+            validate_date_param(from_date, to_date, period)
+            from_date, to_date = derive_from_and_to_date(from_date, to_date, period)
+
+            origin_url = "https://www.nseindia.com/companies-listing/corporate-filings-financial-results"
+            url = "https://www.nseindia.com/api/corporates-financial-results?index=equities&"
+            payload = f"from_date={from_date}&to_date={to_date}&period={fin_period}" + (
+                "&fo_sec=true" if fo_sec else ""
+            )
+
+            response = nse_urlfetch(url + payload, origin_url=origin_url)
+            if response.status_code != 200:
+                raise NSEDataNotFound(
+                    f"Failed to fetch financial data: Status {response.status_code}"
+                )
+
+            data_list = response.json()
+            master_df = pd.DataFrame(data_list)
+            master_df.columns = [name.replace(" ", "") for name in master_df.columns]
+
+            # Filter by symbol if provided
+            if symbol:
+                master_df = master_df[master_df["symbol"].str.upper() == symbol.upper()]
+                if master_df.empty:
+                    logging.warning(f"No financial data found for symbol: {symbol}")
+                    return pd.DataFrame().to_json()  # Return empty DataFrame as JSON
+
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/58.0.3029.110",
+                "Accept": "*/*",
+                "Referer": "https://www.nseindia.com/",
+            }
+            ns = {
+                "in-bse-fin": "http://www.bseindia.com/xbrl/fin/2020-03-31/in-bse-fin"
+            }
+            keys = [
+                "Symbol",
+                "RevenueFromOperations",
+                "ProfitBeforeTax",
+                "ProfitLossForPeriod",
+            ]  # Simplified for example
+
+            fin_df = pd.DataFrame()
+            for row in master_df.itertuples(index=False):
+                logging.debug(f"Processing financial data for {row.symbol}")
+                try:
+                    resp = requests.get(row.xbrl, headers=headers, timeout=10)
+                    resp.raise_for_status()
+                    root = ET.fromstring(resp.content)
+                    data = {
+                        key: root.find(f".//in-bse-fin:{key}", ns).text
+                        if root.find(f".//in-bse-fin:{key}", ns) is not None
+                        else None
+                        for key in keys
+                    }
+                    df = pd.DataFrame([data])
+                    fin_df = pd.concat([fin_df, df], ignore_index=True)
+                except Exception as e:
+                    logging.warning(
+                        f"Failed to parse financial data for {row.symbol}: {str(e)}"
+                    )
+
+            return fin_df.to_json()
+
         except Exception as e:
-            return f"Error retrieving financial results: {str(e)}"
+            logging.error(f"Error in get_financial_results_for_equity: {str(e)}")
+            raise
+
+    def get_fno_equity_list(self):
+        """Retrieve the list of derivative equities with lot sizes."""
+        try:
+            df = fno_equity_list()
+            return df.to_json()
+        except Exception as e:
+            return f"Error retrieving F&O equity list: {str(e)}"
 
     def get_future_price_volume_data(
         self,
@@ -347,7 +619,7 @@ class ChatTools:
             df = future_price_volume_data(
                 symbol, instrument, from_date, to_date, period
             )
-            return df.to_string(index=False)
+            return df.to_json()
         except Exception as e:
             return f"Error retrieving future price volume data: {str(e)}"
 
@@ -365,7 +637,7 @@ class ChatTools:
             df = option_price_volume_data(
                 symbol, instrument, option_type, from_date, to_date, period
             )
-            return df.to_string(index=False)
+            return df.to_json()
         except Exception as e:
             return f"Error retrieving option price volume data: {str(e)}"
 
@@ -373,7 +645,7 @@ class ChatTools:
         """Retrieve F&O bhav copy for a specific trade date."""
         try:
             df = fno_bhav_copy(trade_date)
-            return df.to_string(index=False)
+            return df.to_json()
         except Exception as e:
             return f"Error retrieving F&O bhav copy: {str(e)}"
 
@@ -381,7 +653,7 @@ class ChatTools:
         """Retrieve participant-wise open interest data for a specific trade date."""
         try:
             df = participant_wise_open_interest(trade_date)
-            return df.to_string(index=False)
+            return df.to_json()
         except Exception as e:
             return f"Error retrieving participant-wise open interest: {str(e)}"
 
@@ -389,7 +661,7 @@ class ChatTools:
         """Retrieve participant-wise trading volume data for a specific trade date."""
         try:
             df = participant_wise_trading_volume(trade_date)
-            return df.to_string(index=False)
+            return df.to_json()
         except Exception as e:
             return f"Error retrieving participant-wise trading volume: {str(e)}"
 
@@ -397,7 +669,7 @@ class ChatTools:
         """Retrieve FII derivatives statistics for a specific trade date."""
         try:
             df = fii_derivatives_statistics(trade_date)
-            return df.to_string(index=False)
+            return df.to_json()
         except Exception as e:
             return f"Error retrieving FII derivatives statistics: {str(e)}"
 
@@ -423,7 +695,7 @@ class ChatTools:
         """Retrieve live NSE option chain for a given symbol and expiry date."""
         try:
             df = nse_live_option_chain(symbol, expiry_date, oi_mode)
-            return df.to_string(index=False)
+            return df.to_json()
         except Exception as e:
             return f"Error retrieving live option chain: {str(e)}"
 
@@ -676,3 +948,36 @@ class ChatTools:
             return str(result)
         except Exception as e:
             return f"Error retrieving AMC profiles: {str(e)}"
+
+    def simulate_portfolio_growth(
+        self,
+        initial_investment: float,
+        monthly_sip: float,
+        annual_return: float,
+        years: int,
+    ):
+        """
+        Simulate portfolio growth using compound interest for an initial lump sum and monthly SIP contributions.
+        """
+        r = annual_return / 100
+        n = years
+        fv_lumpsum = initial_investment * ((1 + r) ** n)
+        fv_sip = monthly_sip * (((1 + r / 12) ** (12 * n) - 1) / (r / 12))
+        total = fv_lumpsum + fv_sip
+        return (
+            f"After {years} years, your portfolio could grow to approximately {total:.2f} "
+            f"with an annual return of {annual_return}%."
+        )
+
+    def get_portfolio_summary(self, portfolio: dict):
+        """
+        Summarize the user's portfolio.
+        Args:
+            portfolio (dict): A dictionary where keys are asset names and values are amounts.
+        Returns:
+            str: A summary of the portfolio.
+        """
+        total_value = sum(portfolio.values())
+        summary_lines = [f"{asset}: {value}" for asset, value in portfolio.items()]
+        summary_lines.append(f"Total Portfolio Value: {total_value}")
+        return "\n".join(summary_lines)
