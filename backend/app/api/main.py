@@ -232,7 +232,7 @@ GOOGLE_CSE_ID = os.environ.get("GOOGLE_SEACH_ENGINE_ID")
 
 # Initialize LLM and Tools
 llm = ChatGoogleGenerativeAI(
-    model="gemini-2.0-pro-exp-02-05",
+    model="gemini-2.5-pro-exp-03-25",
     api_key=GEMINI_API_KEY,
     safety_settings=safety_settings,
 )
