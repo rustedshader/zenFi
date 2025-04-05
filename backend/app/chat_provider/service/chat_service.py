@@ -1,15 +1,14 @@
 import datetime
-from typing import AsyncGenerator
+import json
+from typing import AsyncGenerator, List
 from langgraph.graph import StateGraph, START, END
-from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
+from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage, AIMessage
 from langchain_community.tools.tavily_search import TavilySearchResults
 from langchain_chroma import Chroma
 from langchain.tools import Tool
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_community.tools.yahoo_finance_news import (
-    YahooFinanceNewsTool,
-)
+from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
+from langchain_community.tools.yahoo_finance_news import YahooFinanceNewsTool
+from pydantic import BaseModel, Field, ValidationError
 from app.chat_provider.tools.chat_tools import ChatTools
 from langchain_community.tools import DuckDuckGoSearchResults
 from langchain_community.utilities import SearxSearchWrapper
@@ -18,7 +17,6 @@ from langchain_community.tools import YouTubeSearchTool
 from langchain_experimental.utilities import PythonREPL
 from langchain.tools import StructuredTool
 from langchain_google_community import GoogleSearchAPIWrapper
-from langchain_core.messages import AIMessage
 from app.chat_provider.tools.stock_market_tools import StockAnalysisService
 from app.chat_provider.service.chat_service_prompt import SYSTEM_PROMPT
 from app.chat_provider.service.schemas import (
@@ -41,9 +39,10 @@ from app.chat_provider.service.schemas import (
     MFPerformanceInput,
     MFAllAMCProfilesInput,
 )
-
 from app.chat_provider.service.utils import retrieve_from_chroma
 from app.chat_provider.service.analysis_pipeline import comprehensive_stock_research
+from langchain_core.output_parsers import PydanticOutputParser
+from langchain_core.prompts import PromptTemplate
 
 
 class ChatService:
@@ -72,6 +71,7 @@ class ChatService:
 
         self.yahoo_finance_tool = YahooFinanceNewsTool()
         self.python_repl = PythonREPL()
+
         self.google_search = Tool(
             name="google_search",
             description="Search Google for recent results.",
@@ -109,7 +109,7 @@ class ChatService:
         self.search_youtube = Tool(
             name="Search_Youtube",
             func=self.chat_tools.search_youtube,
-            description="Perform comprehesive search on youtube to get the best results and video about given query",
+            description="Perform comprehensive search on YouTube to get the best results and video about a given query",
         )
 
         self.youtube_captions_tool = Tool(
@@ -127,7 +127,7 @@ class ChatService:
 
         self.repl_tool = Tool(
             name="python_repl",
-            description="A Python shell. Use this to execute python commands. Input should be a valid python command. If you want to see the output of a value, you should print it out with `print(...)`.",
+            description="A Python shell. Use this to execute python commands. Input should be a valid python command. Print values to see output.",
             func=self.python_repl.run,
         )
 
@@ -140,7 +140,7 @@ class ChatService:
         self.price_volume_deliverable_tool = StructuredTool.from_function(
             func=self.chat_tools.get_price_volume_and_deliverable_data,
             name="Get_Price_Volume_Deliverable_Data",
-            description="Retrieve historical price, volume, and deliverable position data for a stock. Use this tool to analyze stock performance over time.",
+            description="Retrieve historical price, volume, and deliverable position data for a stock.",
             args_schema=PriceVolumeDeliverableInput,
         )
         self.index_data_tool = StructuredTool.from_function(
@@ -152,7 +152,7 @@ class ChatService:
         self.bhav_copy_tool = Tool(
             name="Get_Bhav_Copy_With_Delivery",
             func=self.chat_tools.get_bhav_copy_with_delivery,
-            description="Retrieve bhav copy with delivery data for a specific trade date. Parameters: trade_date (str, 'dd-mm-yyyy').",
+            description="Retrieve bhav copy with delivery data for a specific trade date (format 'dd-mm-yyyy').",
         )
         self.fno_equity_list_tool = StructuredTool.from_function(
             func=self.chat_tools.get_fno_equity_list,
@@ -160,14 +160,12 @@ class ChatService:
             description="Retrieve the list of derivative equities with lot sizes. No parameters required.",
             args_schema=NoInput,
         )
-
         self.financial_results_tool = StructuredTool.from_function(
             func=self.chat_tools.get_financial_results_for_equity,
             name="Get_Financial_Results_For_Equity",
             description="Retrieve financial results for equities.",
             args_schema=FinancialResultsInput,
         )
-
         self.future_price_volume_tool = StructuredTool.from_function(
             func=self.chat_tools.get_future_price_volume_data,
             name="Get_Future_Price_Volume_Data",
@@ -183,22 +181,22 @@ class ChatService:
         self.fno_bhav_copy_tool = Tool(
             name="Get_FNO_Bhav_Copy",
             func=self.chat_tools.get_fno_bhav_copy,
-            description="Retrieve F&O bhav copy for a specific trade date. Parameter: trade_date (str, 'dd-mm-yyyy', e.g., '20-06-2023').",
+            description="Retrieve F&O bhav copy for a specific trade date (format 'dd-mm-yyyy').",
         )
         self.participant_oi_tool = Tool(
             name="Get_Participant_Wise_Open_Interest",
             func=self.chat_tools.get_participant_wise_open_interest,
-            description="Retrieve participant-wise open interest data (FII, DII, etc.) for a specific trade date. Parameter: trade_date (str, 'dd-mm-yyyy', e.g., '20-06-2023').",
+            description="Retrieve participant-wise open interest data for a specific trade date (format 'dd-mm-yyyy').",
         )
         self.participant_volume_tool = Tool(
             name="Get_Participant_Wise_Trading_Volume",
             func=self.chat_tools.get_participant_wise_trading_volume,
-            description="Retrieve participant-wise trading volume data for a specific trade date. Parameter: trade_date (str, 'dd-mm-yyyy', e.g., '20-06-2023').",
+            description="Retrieve participant-wise trading volume data for a specific trade date (format 'dd-mm-yyyy').",
         )
         self.fii_derivatives_tool = Tool(
             name="Get_FII_Derivatives_Statistics",
             func=self.chat_tools.get_fii_derivatives_statistics,
-            description="Retrieve FII derivatives statistics for a specific trade date. Parameter: trade_date (str, 'dd-mm-yyyy', e.g., '20-06-2023').",
+            description="Retrieve FII derivatives statistics for a specific trade date (format 'dd-mm-yyyy').",
         )
         self.expiry_dates_future_tool = StructuredTool.from_function(
             func=self.chat_tools.get_expiry_dates_future,
@@ -218,98 +216,84 @@ class ChatService:
             description="Retrieve live NSE option chain for a given symbol and expiry date.",
             args_schema=LiveOptionChainInput,
         )
-
         self.datetime_tool = StructuredTool.from_function(
             name="Datetime",
             func=lambda: datetime.datetime.now().isoformat(),
             description="Returns the current datetime",
             args_schema=NoInput,
         )
-
         self.mf_available_schemes_tool = StructuredTool.from_function(
             func=ChatTools().get_mf_available_schemes,
             name="Get_MF_Available_Schemes",
             description="Retrieve all available mutual fund schemes for a given AMC. Input: amc (str).",
             args_schema=MFAvailableSchemesInput,
         )
-
         self.mf_quote_tool = StructuredTool.from_function(
             func=ChatTools().get_mf_quote,
             name="Get_MF_Quote",
             description="Retrieve the latest quote for a given mutual fund scheme.",
             args_schema=MFQuoteInput,
         )
-
         self.mf_details_tool = StructuredTool.from_function(
             func=ChatTools().get_mf_details,
             name="Get_MF_Details",
             description="Retrieve detailed info for a given mutual fund scheme.",
             args_schema=MFDetailsInput,
         )
-
         self.mf_codes_tool = StructuredTool.from_function(
             func=ChatTools().get_mf_codes,
             name="Get_MF_Codes",
             description="Retrieve a dictionary of all mutual fund scheme codes and names.",
             args_schema=NoInput,
         )
-
         self.mf_historical_nav_tool = StructuredTool.from_function(
             func=ChatTools().get_mf_historical_nav,
             name="Get_MF_Historical_NAV",
             description="Retrieve historical NAV data for a given mutual fund scheme.",
             args_schema=MFHistoricalNAVInput,
         )
-
         self.mf_history_tool = StructuredTool.from_function(
             func=ChatTools().mf_history,
             name="Get_MF_History",
             description="Retrieve historical NAV data with daily changes for a mutual fund scheme.",
             args_schema=MFHistoryInput,
         )
-
         self.mf_balance_units_value_tool = StructuredTool.from_function(
             func=ChatTools().calculate_balance_units_value,
             name="Calculate_MF_Balance_Units_Value",
             description="Calculate the current market value of held units for a mutual fund scheme.",
             args_schema=MFBalanceUnitsValueInput,
         )
-
         self.mf_returns_tool = StructuredTool.from_function(
             func=ChatTools().calculate_returns,
             name="Calculate_MF_Returns",
             description="Calculate absolute and IRR annualised returns for a mutual fund scheme.",
             args_schema=MFReturnsInput,
         )
-
         self.mf_open_ended_equity_tool = StructuredTool.from_function(
             func=ChatTools().get_open_ended_equity_scheme_performance,
             name="Get_MF_Open_Ended_Equity_Performance",
             description="Retrieve daily performance of open ended equity mutual fund schemes.",
             args_schema=MFPerformanceInput,
         )
-
         self.mf_open_ended_debt_tool = StructuredTool.from_function(
             func=ChatTools().get_open_ended_debt_scheme_performance,
             name="Get_MF_Open_Ended_Debt_Performance",
             description="Retrieve daily performance of open ended debt mutual fund schemes.",
             args_schema=MFPerformanceInput,
         )
-
         self.mf_open_ended_hybrid_tool = StructuredTool.from_function(
             func=ChatTools().get_open_ended_hybrid_scheme_performance,
             name="Get_MF_Open_Ended_Hybrid_Performance",
             description="Retrieve daily performance of open ended hybrid mutual fund schemes.",
             args_schema=MFPerformanceInput,
         )
-
         self.mf_open_ended_solution_tool = StructuredTool.from_function(
             func=ChatTools().get_open_ended_solution_scheme_performance,
             name="Get_MF_Open_Ended_Solution_Performance",
             description="Retrieve daily performance of open ended solution mutual fund schemes.",
             args_schema=MFPerformanceInput,
         )
-
         self.mf_all_amc_profiles_tool = StructuredTool.from_function(
             func=ChatTools().get_all_amc_profiles,
             name="Get_All_MF_AMC_Profiles",
@@ -360,9 +344,61 @@ class ChatService:
             self.scrape_web_url,
         ]
 
-        self.state = {"messages": [SystemMessage(content=SYSTEM_PROMPT)]}
+        # Create a dictionary for fast tool lookup in tools_node
+        self.tool_dict = {tool.name: tool for tool in self.tools}
 
+        self.state = {"messages": [SystemMessage(content=SYSTEM_PROMPT)]}
         self.graph = self._build_graph()
+
+        # Pre-bind tools to the LLM once to avoid repeated binding on every call
+        self.bound_llm = self.llm.bind_tools(self.tools)
+
+    def fetch_top_finance_news(self):
+        """
+        Uses the LLM to search across web and YouTube news channels, analyze the data,
+        and return a list of the top finance news in a JSON format adhering to a specific schema.
+        """
+
+        # Define the Pydantic models for our schema.
+        class NewsItem(BaseModel):
+            headline: str = Field(description="The headline of the news article")
+            summary: str = Field(description="A short summary of the news article")
+            source: str = Field(description="The source of the news article")
+            publishedAt: str = Field(
+                description="The publication datetime in ISO 8601 datetime string"
+            )
+
+        class NewsResponse(BaseModel):
+            news: list[NewsItem] = Field(description="A list of news items")
+
+        # Create a Pydantic output parser using the NewsResponse model.
+        parser = PydanticOutputParser(pydantic_object=NewsResponse)
+
+        # Define the prompt template with the injected format instructions.
+        prompt = PromptTemplate(
+            template=(
+                "Fetch the top finance news for today. "
+                "Search across the web and YouTube news channels for the latest finance news. "
+                "Perform an analysis of the content and provide a concise list of the best headlines along with short summaries. "
+                "Return the result in pure JSON format as an object with a 'news' key that maps to an array of news items. "
+                "Each news item must have the keys: 'headline', 'summary', 'source', and 'publishedAt'. "
+                "Ensure that the output is valid JSON and does not include any additional text or markdown formatting.\n"
+                'Ensure in this format: {{  "news": [    {{      "headline": "string",      "summary": "string",      "source": "string",      "publishedAt": "ISO 8601 datetime string"    }}  ]}}'
+                "{format_instructions}"
+            ),
+            input_variables=[],
+            partial_variables={"format_instructions": parser.get_format_instructions()},
+        )
+
+        # Combine the prompt with the bound LLM.
+        prompt_and_model = prompt | self.bound_llm
+        output = prompt_and_model.invoke({})
+
+        # Parse and validate the output using the Pydantic parser.
+        parsed_output = parser.invoke(output)
+
+        # Return the validated data as a Python dictionary.
+        return parsed_output.model_dump()
 
     def _build_graph(self):
         graph_builder = StateGraph(State)
@@ -377,8 +413,7 @@ class ChatService:
 
     def chatbot(self, state: State):
         """Process messages and potentially call tools."""
-        llm_with_tools = self.llm.bind_tools(self.tools)
-        response = llm_with_tools.invoke(state["messages"])
+        response = self.bound_llm.invoke(state["messages"])
         return {"messages": [response]}
 
     def tools_node(self, state: State):
@@ -387,7 +422,7 @@ class ChatService:
         tool_results = []
         for tool_call in last_message.tool_calls:
             try:
-                tool = next(t for t in self.tools if t.name == tool_call["name"])
+                tool = self.tool_dict[tool_call["name"]]
                 result = tool.invoke(tool_call["args"])
                 tool_results.append(
                     ToolMessage(content=str(result), tool_call_id=tool_call["id"])
@@ -417,15 +452,14 @@ class ChatService:
 
     async def stream_input(self, user_input: str) -> AsyncGenerator[str, None]:
         self.state["messages"].append(HumanMessage(content=user_input))
-        initial_length = len(self.state["messages"])
-
+        pointer = len(self.state["messages"])
         async for state_update in self.graph.astream(self.state, stream_mode="values"):
             self.state = state_update
-            new_messages = self.state["messages"][initial_length:]
+            new_messages = self.state["messages"][pointer:]
             for msg in new_messages:
                 if isinstance(msg, AIMessage):
                     content = msg.content
                     if isinstance(content, list):
                         content = "\n".join(str(item) for item in content)
                     yield content
-            initial_length = len(self.state["messages"])
+            pointer = len(self.state["messages"])

@@ -21,6 +21,12 @@ export default function Header() {
       <div className="flex items-center gap-2">
         {isLoggedIn ? (
           <>
+            <Button variant="ghost" onClick={() => router.push('/')}>
+              Home
+            </Button>
+            <Button variant="ghost" onClick={() => router.push('/news')}>
+              News
+            </Button>
             <Button variant="ghost" onClick={() => router.push('/sessions')}>
               History
             </Button>
