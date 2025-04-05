@@ -15,6 +15,8 @@ backoff==2.2.1
 bcrypt==4.3.0
 beautifulsoup4==4.13.3
 blinker==1.9.0
+boto3==1.37.24
+botocore==1.37.24
 bs4==0.0.2
 build==1.2.2.post1
 cachetools==5.5.2
@@ -90,6 +92,7 @@ importlib_resources==6.5.2
 itsdangerous==2.2.0
 Jinja2==3.1.6
 jiter==0.9.0
+jmespath==1.0.1
 joblib==1.4.2
 jsonpatch==1.33
 jsonpointer==3.0.0
@@ -205,6 +208,7 @@ pytube==15.0.0
 pytz==2025.1
 PyYAML==6.0.2
 RapidFuzz==3.12.2
+redis==5.2.1
 regex==2024.11.6
 requests==2.32.3
 requests-oauthlib==2.0.0
@@ -212,6 +216,8 @@ requests-toolbelt==1.0.0
 rich==13.9.4
 rich-toolkit==0.13.2
 rsa==4.9
+s3cmd==2.4.0
+s3transfer==0.11.4
 safetensors==0.5.3
 scikit-learn==1.6.1
 scipy==1.15.2
