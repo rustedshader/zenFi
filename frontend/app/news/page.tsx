@@ -119,7 +119,9 @@ export default function NewsFeed() {
 
       {filteredNews.length === 0 && filter && !isLoading && (
         <div className="text-center p-8 bg-gray-50 rounded-lg">
-          <p className="text-gray-600">No results found for "{filter}"</p>
+          <p className="text-gray-600">
+            No results found for &quot;{filter}&quot;
+          </p>
         </div>
       )}
 
