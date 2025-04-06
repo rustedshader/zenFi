@@ -1,6 +1,5 @@
 import datetime
-import json
-from typing import AsyncGenerator, List
+from typing import AsyncGenerator
 from langgraph.graph import StateGraph, START, END
 from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage, AIMessage
 from langchain_community.tools.tavily_search import TavilySearchResults
@@ -8,7 +7,7 @@ from langchain_chroma import Chroma
 from langchain.tools import Tool
 from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
 from langchain_community.tools.yahoo_finance_news import YahooFinanceNewsTool
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field
 from app.chat_provider.tools.chat_tools import ChatTools
 from langchain_community.tools import DuckDuckGoSearchResults
 from langchain_community.utilities import SearxSearchWrapper
@@ -39,7 +38,7 @@ from app.chat_provider.service.schemas import (
     MFPerformanceInput,
     MFAllAMCProfilesInput,
 )
-from app.chat_provider.service.utils import retrieve_from_chroma
+from app.chat_provider.service.utils import retrieve_from_google_knowledge_base
 from app.chat_provider.service.analysis_pipeline import comprehensive_stock_research
 from langchain_core.output_parsers import PydanticOutputParser
 from langchain_core.prompts import PromptTemplate
@@ -63,10 +62,10 @@ class ChatService:
             persist_directory="knowledge_base_db",
             embedding_function=embeddings,
         )
-        self.chroma_tool = Tool(
-            name="Chroma_DB_Search",
-            func=lambda q: retrieve_from_chroma(q, self.vectorstore),
-            description="Search the Chroma database for specific financial information.",
+        self.google_knowledge_base_tool = Tool(
+            name="Google_Knowledge_Base_Search",
+            func=lambda q: retrieve_from_google_knowledge_base(q),
+            description="Search the Google Knowledge Base for specific financial information.",
         )
 
         self.yahoo_finance_tool = YahooFinanceNewsTool()
@@ -303,7 +302,7 @@ class ChatService:
 
         self.tools = [
             self.tavily_tool,
-            self.chroma_tool,
+            self.google_knowledge_base_tool,
             self.yahoo_finance_tool,
             self.wikipedia_tool,
             self.stock_price_tool,

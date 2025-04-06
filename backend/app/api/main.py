@@ -34,7 +34,6 @@ from langchain_community.tools.tavily_search import TavilySearchResults
 from langchain_community.tools import BraveSearch
 from app.chat_provider.service.chat_service import ChatService
 from redis.asyncio import Redis
-from langchain_community.tools.yahoo_finance_news import YahooFinanceNewsTool
 
 
 # Load environment variables

@@ -1,0 +1,36 @@
+// Zenfi AI Backend System
+digraph {
+	graph [bgcolor="#f0f0f0" fontcolor="#333333" fontsize=16 label="Zenfi AI Backend System
+Built with Langchain, LangGraph, and FastAPI" labelloc=t rankdir=TB splines=spline]
+	node [fontname=Helvetica shape=box style="filled,rounded"]
+	edge [fontname=Helvetica fontsize=10]
+	subgraph cluster_api {
+		color="#d9e6f2" label="API Layer (FastAPI)" style=filled
+		api_server [label="API Server
+(FastAPI, OAuth2, JWT)" fillcolor="#a3c2e0" shape=rect]
+		redis [label="Redis
+(Caching)" fillcolor="#ff9999" shape=cylinder]
+		db [label="Database
+(PostgreSQL)" fillcolor="#99ff99" shape=cylinder]
+	}
+	subgraph cluster_langchain {
+		color="#e6f2d9" label="Langchain Components" style=filled
+		SystemPrompt [label="System Prompt" color="#cccc00" fillcolor="#ffff99" shape=parallelogram]
+		chatbot [label="Chatbot
+LLM: Gemini-2.5-pro-exp-03-25" color="#1a53ff" fillcolor="#4d79ff" fontcolor=white shape=rect]
+		tools [label=<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0"><TR><TD COLSPAN="2"><B>Tools</B></TD></TR><TR><TD bgcolor="#e0e0e0"><B>Search Tools</B></TD><TD>TavilySearchResults<br/>google_search<br/>Search_The_Internet (Google, Brave Search, DuckDuckGo, Tavily, Searxng)<br/>Search_Youtube<br/>Get_Youtube_Captions<br/>Wikipedia_Search</TD></TR><TR><TD bgcolor="#e0e0e0"><B>Financial Tools</B></TD><TD>YahooFinanceNewsTool<br/>Web_Financial_Research<br/>Get_Stock_Prices</TD></TR><TR><TD bgcolor="#e0e0e0"><B>NSE Data Tools (ChatTools)</B></TD><TD>Get_Price_Volume_Deliverable_Data<br/>Get_Index_Data<br/>Get_Bhav_Copy_With_Delivery<br/>Get_FNO_Equity_List<br/>Get_Financial_Results_For_Equity<br/>Get_Future_Price_Volume_Data<br/>Get_Option_Price_Volume_Data<br/>Get_FNO_Bhav_Copy<br/>Get_Participant_Wise_Open_Interest<br/>Get_Participant_Wise_Trading_Volume<br/>Get_FII_Derivatives_Statistics<br/>Get_Expiry_Dates_Future<br/>Get_Expiry_Dates_Option_Index<br/>Get_NSE_Live_Option_Chain</TD></TR><TR><TD bgcolor="#e0e0e0"><B>Mutual Fund Tools (ChatTools)</B></TD><TD>Get_MF_Available_Schemes<br/>Get_MF_Quote<br/>Get_MF_Details<br/>Get_MF_Codes<br/>Get_MF_Historical_NAV<br/>Get_MF_History<br/>Calculate_MF_Balance_Units_Value<br/>Calculate_MF_Returns<br/>Get_MF_Open_Ended_Equity_Performance<br/>Get_MF_Open_Ended_Debt_Performance<br/>Get_MF_Open_Ended_Hybrid_Performance<br/>Get_MF_Open_Ended_Solution_Performance<br/>Get_All_MF_AMC_Profiles</TD></TR><TR><TD bgcolor="#e0e0e0"><B>Utility Tools</B></TD><TD>python_repl<br/>Datetime<br/>Scrape_Web_URL</TD></TR><TR><TD bgcolor="#e0e0e0"><B>Knowledge Base Tools</B></TD><TD>Chroma_DB_Search<br/>Google Knowledge Graph</TD></TR></TABLE>> color="#4d79ff" fillcolor="#b3d9ff" height=2 width=4]
+	}
+	START [label="User Input
+(via API)" color="#ff4d4d" fillcolor="#ff9999" fontcolor=white shape=circle]
+	END [label="Final Output
+(to API)" color="#ff4d4d" fillcolor="#ff9999" fontcolor=white shape=circle]
+	START -> api_server [label="HTTP Request" color="#666666"]
+	api_server -> chatbot [label="Process Input" color="#666666"]
+	api_server -> redis [label="Cache Access" color="#666666" style=dashed]
+	api_server -> db [label="DB Operations" color="#666666" style=dashed]
+	SystemPrompt -> chatbot [label=Initializes color="#666666"]
+	chatbot -> tools [label="If Tools Needed" color="#00cc00" style=dashed]
+	tools -> chatbot [label="Tool Results" color="#00cc00" style=dashed]
+	chatbot -> api_server [label=Response color="#666666"]
+	api_server -> END [label="HTTP Response" color="#666666"]
+}
