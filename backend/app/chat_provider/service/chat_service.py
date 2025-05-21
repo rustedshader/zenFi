@@ -39,7 +39,6 @@ from app.chat_provider.service.schemas import (
     MFAllAMCProfilesInput,
 )
 from app.chat_provider.service.utils import retrieve_from_google_knowledge_base
-from app.chat_provider.service.analysis_pipeline import comprehensive_stock_research
 from langchain_core.output_parsers import PydanticOutputParser
 from langchain_core.prompts import PromptTemplate
 
@@ -57,11 +56,6 @@ class ChatService:
         self.search = google_search_wrapper
         self.tavily_tool = tavily_tool
         embeddings = google_embedings
-        self.comprehensive_stock_research = comprehensive_stock_research
-        self.vectorstore = Chroma(
-            persist_directory="knowledge_base_db",
-            embedding_function=embeddings,
-        )
         self.google_knowledge_base_tool = Tool(
             name="Google_Knowledge_Base_Search",
             func=lambda q: retrieve_from_google_knowledge_base(q),
@@ -128,12 +122,6 @@ class ChatService:
             name="python_repl",
             description="A Python shell. Use this to execute python commands. Input should be a valid python command. Print values to see output.",
             func=self.python_repl.run,
-        )
-
-        self.web_financial_research_tool = Tool(
-            name="Web_Financial_Research",
-            func=self.comprehensive_stock_research,
-            description="Perform comprehensive web-based research on a stock, including company info, news, financial analysis, and market insights.",
         )
 
         self.price_volume_deliverable_tool = StructuredTool.from_function(
@@ -307,7 +295,6 @@ class ChatService:
             self.wikipedia_tool,
             self.stock_price_tool,
             self.search_web,
-            self.web_financial_research_tool,
             self.search_youtube,
             self.repl_tool,
             self.price_volume_deliverable_tool,
@@ -343,62 +330,28 @@ class ChatService:
             self.scrape_web_url,
         ]
 
-        # Create a dictionary for fast tool lookup in tools_node
         self.tool_dict = {tool.name: tool for tool in self.tools}
+        self.system_prompt_message = SystemMessage(content=SYSTEM_PROMPT)
 
-        self.state = {"messages": [SystemMessage(content=SYSTEM_PROMPT)]}
+        self.state = {"messages": [self.system_prompt_message]}
         self.graph = self._build_graph()
 
-        # Pre-bind tools to the LLM once to avoid repeated binding on every call
         self.bound_llm = self.llm.bind_tools(self.tools)
-
-    def fetch_top_finance_news(self):
+    
+    def load_history(self, history_dicts: list):
         """
-        Uses the LLM to search across web and YouTube news channels, analyze the data,
-        and return a list of the top finance news in a JSON format adhering to a specific schema.
+        Replaces the current message history (except system prompt)
+        with messages loaded from history_dicts (typically from DB/Redis).
         """
-
-        # Define the Pydantic models for our schema.
-        class NewsItem(BaseModel):
-            headline: str = Field(description="The headline of the news article")
-            summary: str = Field(description="A short summary of the news article")
-            source: str = Field(description="The source of the news article")
-            publishedAt: str = Field(
-                description="The publication datetime in ISO 8601 datetime string"
-            )
-
-        class NewsResponse(BaseModel):
-            news: list[NewsItem] = Field(description="A list of news items")
-
-        # Create a Pydantic output parser using the NewsResponse model.
-        parser = PydanticOutputParser(pydantic_object=NewsResponse)
-
-        # Define the prompt template with the injected format instructions.
-        prompt = PromptTemplate(
-            template=(
-                "Fetch the top finance news for today. "
-                "Search across the web and YouTube news channels for the latest finance news. "
-                "Perform an analysis of the content and provide a concise list of the best headlines along with short summaries. "
-                "Return the result in pure JSON format as an object with a 'news' key that maps to an array of news items. "
-                "Each news item must have the keys: 'headline', 'summary', 'source', and 'publishedAt'. "
-                "Ensure that the output is valid JSON and does not include any additional text or markdown formatting.\n"
-                'Ensure in this format: {{  "news": [    {{      "headline": "string",      "summary": "string",      "source": "string",      "publishedAt": "ISO 8601 datetime string"    }}  ]}}'
-                "{format_instructions}"
-            ),
-            input_variables=[],
-            partial_variables={"format_instructions": parser.get_format_instructions()},
-        )
-
-        # Combine the prompt with the bound LLM.
-        prompt_and_model = prompt | self.bound_llm
-        output = prompt_and_model.invoke({})
-
-        # Parse and validate the output using the Pydantic parser.
-        parsed_output = parser.invoke(output)
-
-        # Return the validated data as a Python dictionary.
-        return parsed_output.model_dump()
-
+        self.state["messages"] = [self.system_prompt_message]
+        for msg_data in history_dicts:
+            sender = msg_data.get("sender")
+            message_content = msg_data.get("message")
+            if sender == "user":
+                self.state["messages"].append(HumanMessage(content=message_content))
+            elif sender == "bot":
+                self.state["messages"].append(AIMessage(content=message_content))
+                
     def _build_graph(self):
         graph_builder = StateGraph(State)
         graph_builder.add_node("chatbot", self.chatbot)
@@ -462,3 +415,44 @@ class ChatService:
                         content = "\n".join(str(item) for item in content)
                     yield content
             pointer = len(self.state["messages"])
+    
+    def fetch_top_finance_news(self):
+        """
+        Uses the LLM to search across web and YouTube news channels, analyze the data,
+        and return a list of the top finance news in a JSON format adhering to a specific schema.
+        """
+
+        class NewsItem(BaseModel):
+            headline: str = Field(description="The headline of the news article")
+            summary: str = Field(description="A short summary of the news article")
+            source: str = Field(description="The source of the news article")
+            publishedAt: str = Field(
+                description="The publication datetime in ISO 8601 datetime string"
+            )
+
+        class NewsResponse(BaseModel):
+            news: list[NewsItem] = Field(description="A list of news items")
+
+        parser = PydanticOutputParser(pydantic_object=NewsResponse)
+
+        prompt = PromptTemplate(
+            template=(
+                "Fetch the top finance news for today. "
+                "Search across the web and YouTube news channels for the latest finance news. "
+                "Perform an analysis of the content and provide a concise list of the best headlines along with short summaries. "
+                "Return the result in pure JSON format as an object with a 'news' key that maps to an array of news items. "
+                "Each news item must have the keys: 'headline', 'summary', 'source', and 'publishedAt'. "
+                "Ensure that the output is valid JSON and does not include any additional text or markdown formatting.\n"
+                'Ensure in this format: {{  "news": [    {{      "headline": "string",      "summary": "string",      "source": "string",      "publishedAt": "ISO 8601 datetime string"    }}  ]}}'
+                "{format_instructions}"
+            ),
+            input_variables=[],
+            partial_variables={"format_instructions": parser.get_format_instructions()},
+        )
+
+        prompt_and_model = prompt | self.bound_llm
+        output = prompt_and_model.invoke({})
+
+        parsed_output = parser.invoke(output)
+
+        return parsed_output.model_dump()

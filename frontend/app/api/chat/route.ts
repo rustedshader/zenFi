@@ -18,7 +18,7 @@ export async function POST(req: Request) {
     }
 
     const response = await fetch(
-      `${process.env.NEXT_PUBLIC_BACKEND_API_URL}/chat/stream_http`,
+      `${process.env.NEXT_PUBLIC_BACKEND_API_URL}/chat/stream`,
       {
         method: 'POST',
         headers: {
@@ -26,8 +26,8 @@ export async function POST(req: Request) {
           Authorization: `Bearer ${token}`
         },
         body: JSON.stringify({
-          session_id: sessionId, // Match backend's expected key
-          message: message // Send message as a string
+          session_id: sessionId,
+          message: message
         })
       }
     )
