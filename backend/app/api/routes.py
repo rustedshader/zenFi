@@ -137,7 +137,7 @@ async def send_message(
     await db.commit()
     chat_history = await get_chat_history(input_data.session_id, db)
     response = await chat_service_manager.process_message(
-        input_data.session_id, input_data.message, chat_history
+        input_data.session_id, input_data.message, chat_history, input_data.tool_type
     )
     bot_message = ChatMessage(
         session_id=session.id,
@@ -161,6 +161,8 @@ async def stream_chat(
     try:
         # Creating a UUID Object from the uuid string and validating it too
         session_uuid = uuid_UUID(input_data.session_id)
+        tool_type = input_data.tool_type
+        print(f"Tool type: {tool_type}")
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid session id format")
     stmt = select(ChatSession).where(
@@ -188,7 +190,7 @@ async def stream_chat(
         try:
             yield 'data: {"type":"heartbeat"}\n\n'
             async for token in chat_service_manager.stream_message(
-                input_data.session_id, input_data.message, chat_history
+                input_data.session_id, input_data.message, chat_history , tool_type
             ):
                 if token:
                     # Use precompiled regex to split tokens if needed

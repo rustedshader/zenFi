@@ -1,6 +1,6 @@
 'use client'
 
-import { ArrowUp, Square } from 'lucide-react'
+import { ArrowUp, Microscope, Square, ZoomIn } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
 import Textarea from 'react-textarea-autosize'
@@ -27,6 +27,8 @@ interface ChatPanelProps {
   setMessages: (messages: Message[]) => void
   stop: () => void
   append: (message: Message) => void
+  currentToolType: string;
+  onToolTypeChange: (newToolType: string) => void;
 }
 
 export function ChatPanel({
@@ -37,11 +39,18 @@ export function ChatPanel({
   messages,
   setMessages,
   stop,
-  append
+  append,
+  currentToolType,
+  onToolTypeChange
 }: ChatPanelProps) {
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const isFirstRender = useRef(true)
   const [isComposing, setIsComposing] = useState(false)
+  const deepResearchToggle = () => {
+    const newToolType = currentToolType === 'deepresearch' ? 'standard' : 'deepresearch';
+    onToolTypeChange(newToolType);
+    console.log(newToolType);
+  };
 
   return (
     <div className="fixed bottom-0 left-0 w-full">
@@ -76,6 +85,15 @@ export function ChatPanel({
               }}
             />
             <div className="absolute right-1 sm:right-2 bottom-1 sm:bottom-2">
+              <Button
+                type="button"
+                disabled={isLoading}
+                onClick={deepResearchToggle}
+                variant={currentToolType === "deepresearch" ? "secondary" : "ghost"}
+                title="Toggle Deep Research"
+              >
+                <Microscope className={currentToolType === "deepresearch" ? "text-blue-600" : ""} />
+              </Button>
               <Button
                 type="submit"
                 disabled={isLoading || input.trim().length === 0}

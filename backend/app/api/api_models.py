@@ -53,6 +53,7 @@ class UserLogin(BaseModel):
 class ChatInput(BaseModel):
     session_id: str
     message: str
+    tool_type: str
 
 
 class ChatResponse(BaseModel):

@@ -35,6 +35,7 @@ export function Chat({
   )
   const { isLoggedIn, logout } = useAuth()
   const initializedRef = useRef(false)
+  const [toolType, setToolType] = useState<string>('standard')
 
   // Combined effect for session creation and initial query
   useEffect(() => {
@@ -113,7 +114,7 @@ export function Chat({
         const response = await fetch('/api/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message: userMessage.content, sessionId })
+          body: JSON.stringify({ message: userMessage.content, sessionId: sessionId, tool_type: toolType })
         })
 
         if (!response.ok) {
@@ -182,7 +183,7 @@ export function Chat({
         setIsLoading(false)
       }
     },
-    [sessionId, logout]
+    [sessionId, logout, toolType]
   )
 
   const stop = () => setIsLoading(false)
@@ -194,7 +195,7 @@ export function Chat({
           messages={messages}
           isLoading={isLoading}
           chatId={id}
-          onQuerySelect={() => {}}
+          onQuerySelect={() => { }}
         />
       </div>
       <ChatPanel
@@ -217,6 +218,8 @@ export function Chat({
         setMessages={setMessages}
         stop={stop}
         append={append}
+        currentToolType={toolType}
+        onToolTypeChange={setToolType}
       />
     </div>
   )

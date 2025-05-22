@@ -5,7 +5,7 @@ export const maxDuration = 30
 
 export async function POST(req: Request) {
   try {
-    const { message, sessionId } = await req.json()
+    const { message, sessionId, tool_type } = await req.json()
     const cookieStore = await cookies()
     const token = cookieStore.get('jwt_token')?.value
 
@@ -27,7 +27,8 @@ export async function POST(req: Request) {
         },
         body: JSON.stringify({
           session_id: sessionId,
-          message: message
+          message: message,
+          tool_type: tool_type,
         })
       }
     )

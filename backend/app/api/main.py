@@ -119,8 +119,14 @@ GOOGLE_SEARCH_API_KEY = os.environ.get("GOOGLE_SEARCH_API_KEY")
 TAVILY_SEARCH_API_KEY = os.environ.get("TAVILY_API_KEY")
 GOOGLE_CSE_ID = os.environ.get("GOOGLE_SEACH_ENGINE_ID")
 
-llm = ChatGoogleGenerativeAI(
+deepresearch_llm = ChatGoogleGenerativeAI(
     model="gemini-2.5-pro-preview-03-25",
+    api_key=GEMINI_API_KEY,
+    safety_settings=safety_settings,
+)
+
+quicksearch_llm = ChatGoogleGenerativeAI(
+    model="gemini-2.0-flash-lite",
     api_key=GEMINI_API_KEY,
     safety_settings=safety_settings,
 )
@@ -143,10 +149,18 @@ class ChatServiceManager:
         self.chat_services = {}
         self.semaphore = asyncio.Semaphore(5)  
 
-    def get_chat_service(self, session_id: str) -> ChatService:
-        if session_id not in self.chat_services:
+    def get_chat_service(self, session_id: str,tool_type: str) -> ChatService:
+        if tool_type == "deepresearch":
             self.chat_services[session_id] = ChatService(
-                llm=llm,
+                llm=deepresearch_llm,
+                google_search_wrapper=search,
+                google_embedings=google_embeddings,
+                tavily_tool=tavily_tool,
+                brave_search=brave_search,
+            )
+        else:
+            self.chat_services[session_id] = ChatService(
+                llm=quicksearch_llm,
                 google_search_wrapper=search,
                 google_embedings=google_embeddings,
                 tavily_tool=tavily_tool,
@@ -155,10 +169,10 @@ class ChatServiceManager:
         return self.chat_services[session_id]
 
     async def process_message(
-        self, session_id: str, message: str, chat_history: list
+        self, session_id: str, message: str, chat_history: list , tool_type: str
     ) -> ChatResponse:
         async with self.semaphore:
-            chat_service = self.get_chat_service(session_id)
+            chat_service = self.get_chat_service(session_id,tool_type=tool_type)
             result = chat_service.process_input(message)
             if asyncio.iscoroutine(result):
                 response = await result
@@ -167,10 +181,10 @@ class ChatServiceManager:
             return ChatResponse(message=response, sources=[])
 
     async def stream_message(
-        self, session_id: str, message: str, chat_history: list
+        self, session_id: str, message: str, chat_history: list , tool_type: str
     ) -> AsyncGenerator[str, None]:
         async with self.semaphore:
-            chat_service = self.get_chat_service(session_id)
+            chat_service = self.get_chat_service(session_id,tool_type=tool_type)
             async for token in chat_service.stream_input(message):
                 if token and token.strip():
                     yield token
