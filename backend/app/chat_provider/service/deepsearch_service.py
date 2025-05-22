@@ -17,18 +17,33 @@ from langchain_experimental.utilities import PythonREPL
 from langchain.tools import StructuredTool
 from langchain_google_community import GoogleSearchAPIWrapper
 from app.chat_provider.tools.stock_market_tools import StockAnalysisService
-from app.chat_provider.service.chat_service_prompt import SYSTEM_PROMPT
+from app.chat_provider.service.deepsearch_service_prompt import SYSTEM_PROMPT
 from app.chat_provider.service.schemas import (
+    PriceVolumeDeliverableInput,
+    IndexDataInput,
+    FinancialResultsInput,
+    FuturePriceVolumeInput,
+    OptionPriceVolumeInput,
+    LiveOptionChainInput,
     State,
     WebScrapeInput,
     NoInput,
+    MFAvailableSchemesInput,
+    MFQuoteInput,
+    MFDetailsInput,
+    MFHistoricalNAVInput,
+    MFHistoryInput,
+    MFBalanceUnitsValueInput,
+    MFReturnsInput,
+    MFPerformanceInput,
+    MFAllAMCProfilesInput,
 )
 from app.chat_provider.service.utils import retrieve_from_google_knowledge_base
 from langchain_core.output_parsers import PydanticOutputParser
 from langchain_core.prompts import PromptTemplate
 
 
-class ChatService:
+class DeepSearchChatService:
     def __init__(
         self,
         llm: ChatGoogleGenerativeAI,
@@ -109,13 +124,169 @@ class ChatService:
             func=self.python_repl.run,
         )
 
+        self.price_volume_deliverable_tool = StructuredTool.from_function(
+            func=self.chat_tools.get_price_volume_and_deliverable_data,
+            name="Get_Price_Volume_Deliverable_Data",
+            description="Retrieve historical price, volume, and deliverable position data for a stock.",
+            args_schema=PriceVolumeDeliverableInput,
+        )
+        self.index_data_tool = StructuredTool.from_function(
+            func=self.chat_tools.get_index_data,
+            name="Get_Index_Data",
+            description="Retrieve historical data for an NSE index.",
+            args_schema=IndexDataInput,
+        )
+        self.bhav_copy_tool = Tool(
+            name="Get_Bhav_Copy_With_Delivery",
+            func=self.chat_tools.get_bhav_copy_with_delivery,
+            description="Retrieve bhav copy with delivery data for a specific trade date (format 'dd-mm-yyyy').",
+        )
+        self.fno_equity_list_tool = StructuredTool.from_function(
+            func=self.chat_tools.get_fno_equity_list,
+            name="Get_FNO_Equity_List",
+            description="Retrieve the list of derivative equities with lot sizes. No parameters required.",
+            args_schema=NoInput,
+        )
+        self.financial_results_tool = StructuredTool.from_function(
+            func=self.chat_tools.get_financial_results_for_equity,
+            name="Get_Financial_Results_For_Equity",
+            description="Retrieve financial results for equities.",
+            args_schema=FinancialResultsInput,
+        )
+        self.future_price_volume_tool = StructuredTool.from_function(
+            func=self.chat_tools.get_future_price_volume_data,
+            name="Get_Future_Price_Volume_Data",
+            description="Retrieve future price volume data for a given symbol and instrument.",
+            args_schema=FuturePriceVolumeInput,
+        )
+        self.option_price_volume_tool = StructuredTool.from_function(
+            func=self.chat_tools.get_option_price_volume_data,
+            name="Get_Option_Price_Volume_Data",
+            description="Retrieve option price volume data for a given symbol, instrument, and option type.",
+            args_schema=OptionPriceVolumeInput,
+        )
+        self.fno_bhav_copy_tool = Tool(
+            name="Get_FNO_Bhav_Copy",
+            func=self.chat_tools.get_fno_bhav_copy,
+            description="Retrieve F&O bhav copy for a specific trade date (format 'dd-mm-yyyy').",
+        )
+        self.participant_oi_tool = Tool(
+            name="Get_Participant_Wise_Open_Interest",
+            func=self.chat_tools.get_participant_wise_open_interest,
+            description="Retrieve participant-wise open interest data for a specific trade date (format 'dd-mm-yyyy').",
+        )
+        self.participant_volume_tool = Tool(
+            name="Get_Participant_Wise_Trading_Volume",
+            func=self.chat_tools.get_participant_wise_trading_volume,
+            description="Retrieve participant-wise trading volume data for a specific trade date (format 'dd-mm-yyyy').",
+        )
+        self.fii_derivatives_tool = Tool(
+            name="Get_FII_Derivatives_Statistics",
+            func=self.chat_tools.get_fii_derivatives_statistics,
+            description="Retrieve FII derivatives statistics for a specific trade date (format 'dd-mm-yyyy').",
+        )
+        self.expiry_dates_future_tool = StructuredTool.from_function(
+            func=self.chat_tools.get_expiry_dates_future,
+            name="Get_Expiry_Dates_Future",
+            description="Retrieve future and option expiry dates. No parameters required.",
+            args_schema=NoInput,
+        )
+        self.expiry_dates_option_index_tool = StructuredTool.from_function(
+            func=self.chat_tools.get_expiry_dates_option_index,
+            name="Get_Expiry_Dates_Option_Index",
+            description="Retrieve expiry dates for option indices. No parameters required.",
+            args_schema=NoInput,
+        )
+        self.live_option_chain_tool = StructuredTool.from_function(
+            func=self.chat_tools.get_nse_live_option_chain,
+            name="Get_NSE_Live_Option_Chain",
+            description="Retrieve live NSE option chain for a given symbol and expiry date.",
+            args_schema=LiveOptionChainInput,
+        )
         self.datetime_tool = StructuredTool.from_function(
             name="Datetime",
             func=lambda: datetime.datetime.now().isoformat(),
             description="Returns the current datetime",
             args_schema=NoInput,
         )
-        
+        self.mf_available_schemes_tool = StructuredTool.from_function(
+            func=ChatTools().get_mf_available_schemes,
+            name="Get_MF_Available_Schemes",
+            description="Retrieve all available mutual fund schemes for a given AMC. Input: amc (str).",
+            args_schema=MFAvailableSchemesInput,
+        )
+        self.mf_quote_tool = StructuredTool.from_function(
+            func=ChatTools().get_mf_quote,
+            name="Get_MF_Quote",
+            description="Retrieve the latest quote for a given mutual fund scheme.",
+            args_schema=MFQuoteInput,
+        )
+        self.mf_details_tool = StructuredTool.from_function(
+            func=ChatTools().get_mf_details,
+            name="Get_MF_Details",
+            description="Retrieve detailed info for a given mutual fund scheme.",
+            args_schema=MFDetailsInput,
+        )
+        self.mf_codes_tool = StructuredTool.from_function(
+            func=ChatTools().get_mf_codes,
+            name="Get_MF_Codes",
+            description="Retrieve a dictionary of all mutual fund scheme codes and names.",
+            args_schema=NoInput,
+        )
+        self.mf_historical_nav_tool = StructuredTool.from_function(
+            func=ChatTools().get_mf_historical_nav,
+            name="Get_MF_Historical_NAV",
+            description="Retrieve historical NAV data for a given mutual fund scheme.",
+            args_schema=MFHistoricalNAVInput,
+        )
+        self.mf_history_tool = StructuredTool.from_function(
+            func=ChatTools().mf_history,
+            name="Get_MF_History",
+            description="Retrieve historical NAV data with daily changes for a mutual fund scheme.",
+            args_schema=MFHistoryInput,
+        )
+        self.mf_balance_units_value_tool = StructuredTool.from_function(
+            func=ChatTools().calculate_balance_units_value,
+            name="Calculate_MF_Balance_Units_Value",
+            description="Calculate the current market value of held units for a mutual fund scheme.",
+            args_schema=MFBalanceUnitsValueInput,
+        )
+        self.mf_returns_tool = StructuredTool.from_function(
+            func=ChatTools().calculate_returns,
+            name="Calculate_MF_Returns",
+            description="Calculate absolute and IRR annualised returns for a mutual fund scheme.",
+            args_schema=MFReturnsInput,
+        )
+        self.mf_open_ended_equity_tool = StructuredTool.from_function(
+            func=ChatTools().get_open_ended_equity_scheme_performance,
+            name="Get_MF_Open_Ended_Equity_Performance",
+            description="Retrieve daily performance of open ended equity mutual fund schemes.",
+            args_schema=MFPerformanceInput,
+        )
+        self.mf_open_ended_debt_tool = StructuredTool.from_function(
+            func=ChatTools().get_open_ended_debt_scheme_performance,
+            name="Get_MF_Open_Ended_Debt_Performance",
+            description="Retrieve daily performance of open ended debt mutual fund schemes.",
+            args_schema=MFPerformanceInput,
+        )
+        self.mf_open_ended_hybrid_tool = StructuredTool.from_function(
+            func=ChatTools().get_open_ended_hybrid_scheme_performance,
+            name="Get_MF_Open_Ended_Hybrid_Performance",
+            description="Retrieve daily performance of open ended hybrid mutual fund schemes.",
+            args_schema=MFPerformanceInput,
+        )
+        self.mf_open_ended_solution_tool = StructuredTool.from_function(
+            func=ChatTools().get_open_ended_solution_scheme_performance,
+            name="Get_MF_Open_Ended_Solution_Performance",
+            description="Retrieve daily performance of open ended solution mutual fund schemes.",
+            args_schema=MFPerformanceInput,
+        )
+        self.mf_all_amc_profiles_tool = StructuredTool.from_function(
+            func=ChatTools().get_all_amc_profiles,
+            name="Get_All_MF_AMC_Profiles",
+            description="Retrieve profile data of all mutual fund AMCs.",
+            args_schema=MFAllAMCProfilesInput,
+        )
 
         self.tools = [
             self.tavily_tool,
@@ -126,9 +297,36 @@ class ChatService:
             self.search_web,
             self.search_youtube,
             self.repl_tool,
+            self.price_volume_deliverable_tool,
+            self.index_data_tool,
+            self.bhav_copy_tool,
+            self.fno_equity_list_tool,
+            self.financial_results_tool,
+            self.future_price_volume_tool,
+            self.option_price_volume_tool,
+            self.fno_bhav_copy_tool,
+            self.participant_oi_tool,
+            self.participant_volume_tool,
+            self.fii_derivatives_tool,
+            self.expiry_dates_future_tool,
+            self.expiry_dates_option_index_tool,
+            self.live_option_chain_tool,
             self.datetime_tool,
             self.youtube_captions_tool,
             self.google_search,
+            self.mf_available_schemes_tool,
+            self.mf_quote_tool,
+            self.mf_details_tool,
+            self.mf_codes_tool,
+            self.mf_historical_nav_tool,
+            self.mf_history_tool,
+            self.mf_balance_units_value_tool,
+            self.mf_returns_tool,
+            self.mf_open_ended_equity_tool,
+            self.mf_open_ended_debt_tool,
+            self.mf_open_ended_hybrid_tool,
+            self.mf_open_ended_solution_tool,
+            self.mf_all_amc_profiles_tool,
             self.scrape_web_url,
         ]
 

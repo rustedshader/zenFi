@@ -13,8 +13,8 @@ class User(Base):
     username = Column(String, unique=True, index=True)
     email = Column(String, unique=True, index=True)
     hashed_password = Column(String)
+    stocks = Column(JSON, nullable=True, default=list)  
     created_at = Column(DateTime(timezone=True), default=datetime.datetime.now(datetime.timezone.utc))
-
 
 class ChatSession(Base):
     __tablename__ = "chat_sessions"
@@ -59,3 +59,4 @@ class ChatInput(BaseModel):
 class ChatResponse(BaseModel):
     message: str
     sources: List = []
+

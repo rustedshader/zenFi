@@ -5,13 +5,14 @@ import uuid
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
-from sqlalchemy import func, select
+from sqlalchemy import Engine, func, select
 from sqlalchemy.ext.asyncio import  AsyncSession
 
 from app.api.main import ChatServiceManager, create_access_token, get_chat_history, get_current_user, get_db, hash_password, verify_password
 from app.api.api_models import Base, ChatInput, ChatMessage, ChatSession, FinanceNews, User, UserCreate, UserLogin
 from uuid import UUID as uuid_UUID
 from app.api.main import  token_splitter
+from app.api.main import engine , init_db
 
 chat_service_manager = ChatServiceManager()
 
@@ -23,6 +24,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.on_event("startup")
+async def startup():
+    await init_db()
 
 # Authentication
 @app.post("/auth/register")
@@ -108,6 +113,54 @@ async def get_finance_news(db: AsyncSession = Depends(get_db)):
     await db.commit()
     return fetched_news
 
+
+# Dashboard Stocks Management
+@app.post("/stocks/add")
+async def add_stock(
+    stock_symbol: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    stmt = select(User).where(User.id == current_user.id)
+    result = await db.execute(stmt)
+    user = result.scalars().first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    user.stocks.append(stock_symbol)
+    await db.commit()
+    return {"message": "Stock added successfully"}
+
+@app.post("/stocks/remove")
+async def remove_stock(
+    stock_symbol: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    stmt = select(User).where(User.id == current_user.id)
+    result = await db.execute(stmt)
+    user = result.scalars().first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if stock_symbol in user.stocks:
+        user.stocks.remove(stock_symbol)
+        await db.commit()
+        return {"message": "Stock removed successfully"}
+    else:
+        raise HTTPException(status_code=400, detail="Stock not found in user's list")
+
+@app.get("/stocks")
+async def get_stocks(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    stmt = select(User).where(User.id == current_user.id)
+    result = await db.execute(stmt)
+    user = result.scalars().first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"stocks": user.stocks}
+
+# Chat
 @app.post("/chat")
 async def send_message(
     input_data: ChatInput,

@@ -177,6 +177,7 @@ class ChatTools:
         Returns:
             str: Combined search results from different search engines.
         """
+        print(f"Visiting URL: {query}")
         # Initialize results list
         combined_results = []
 
@@ -238,6 +239,7 @@ class ChatTools:
         Returns:
             str: The scraped content or error message.
         """
+        print(f"Visiting URL: {url}")
         try:
             # Validate URL
             if not url.startswith(("http://", "https://")):

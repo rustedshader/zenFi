@@ -28,8 +28,10 @@ from langchain_community.tools.tavily_search import TavilySearchResults
 from langchain_community.tools import BraveSearch
 from app.chat_provider.service.chat_service import ChatService
 from redis.asyncio import Redis
-from app.api.api_models import  ChatMessage, ChatResponse, User
+from app.api.api_models import  Base, ChatMessage, ChatResponse, User
 from pydantic import SecretStr
+
+from app.chat_provider.service.deepsearch_service import DeepSearchChatService
 
 load_dotenv()
 
@@ -50,6 +52,9 @@ engine = create_async_engine(
 )
 AsyncSessionLocal = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
+async def init_db():
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
 
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -151,7 +156,7 @@ class ChatServiceManager:
 
     def get_chat_service(self, session_id: str,tool_type: str) -> ChatService:
         if tool_type == "deepresearch":
-            self.chat_services[session_id] = ChatService(
+            self.chat_services[session_id] = DeepSearchChatService(
                 llm=deepresearch_llm,
                 google_search_wrapper=search,
                 google_embedings=google_embeddings,
