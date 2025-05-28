@@ -7,8 +7,6 @@ from langchain_community.tools import DuckDuckGoSearchResults
 from langchain_community.tools import YouTubeSearchTool
 from nselib.capital_market import (
     fno_equity_list,
-    market_watch_all_indices,
-    financial_results_for_equity,
 )
 from nselib.derivatives import (
     future_price_volume_data,

@@ -16,7 +16,6 @@ from langchain_community.tools import YouTubeSearchTool
 from langchain_experimental.utilities import PythonREPL
 from langchain.tools import StructuredTool
 from langchain_google_community import GoogleSearchAPIWrapper
-from app.chat_provider.tools.stock_market_tools import StockAnalysisService
 from app.chat_provider.service.deepsearch_service_prompt import SYSTEM_PROMPT
 from app.chat_provider.service.schemas import (
     PriceVolumeDeliverableInput,
@@ -78,8 +77,6 @@ class DeepSearchChatService:
             brave_search=brave_search,
             youtube_search=YouTubeSearchTool(),
         )
-
-        self.financial_analysis_tools = StockAnalysisService()
 
         self.wikipedia_tool = Tool(
             name="Wikipedia_Search",
@@ -337,7 +334,7 @@ class DeepSearchChatService:
         self.graph = self._build_graph()
 
         self.bound_llm = self.llm.bind_tools(self.tools)
-    
+
     def load_history(self, history_dicts: list):
         """
         Replaces the current message history (except system prompt)
@@ -351,7 +348,7 @@ class DeepSearchChatService:
                 self.state["messages"].append(HumanMessage(content=message_content))
             elif sender == "bot":
                 self.state["messages"].append(AIMessage(content=message_content))
-                
+
     def _build_graph(self):
         graph_builder = StateGraph(State)
         graph_builder.add_node("chatbot", self.chatbot)
@@ -415,7 +412,7 @@ class DeepSearchChatService:
                         content = "\n".join(str(item) for item in content)
                     yield content
             pointer = len(self.state["messages"])
-    
+
     def fetch_top_finance_news(self):
         """
         Uses the LLM to search across web and YouTube news channels, analyze the data,

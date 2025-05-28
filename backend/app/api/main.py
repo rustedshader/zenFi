@@ -32,6 +32,7 @@ from app.api.api_models import  Base, ChatMessage, ChatResponse, User
 from pydantic import SecretStr
 
 from app.chat_provider.service.deepsearch_service import DeepSearchChatService
+from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 
 load_dotenv()
 
@@ -154,45 +155,48 @@ class ChatServiceManager:
         self.chat_services = {}
         self.semaphore = asyncio.Semaphore(5)  
 
-    def get_chat_service(self, session_id: str,tool_type: str) -> ChatService:
-        if tool_type == "deepresearch":
-            self.chat_services[session_id] = DeepSearchChatService(
-                llm=deepresearch_llm,
-                google_search_wrapper=search,
-                google_embedings=google_embeddings,
-                tavily_tool=tavily_tool,
-                brave_search=brave_search,
+    def get_chat_service(self, session_id: str,tool_type: str):
+        # if tool_type == "deepresearch":
+        #     self.chat_services = DeepSearchChatService(
+        #         llm=deepresearch_llm,
+        #         google_search_wrapper=search,
+        #         google_embedings=google_embeddings,
+        #         tavily_tool=tavily_tool,
+        #         brave_search=brave_search,
+        #     )
+        # else:
+            self.chat_services = ChatService(
+                model=quicksearch_llm,
             )
-        else:
-            self.chat_services[session_id] = ChatService(
-                llm=quicksearch_llm,
-                google_search_wrapper=search,
-                google_embedings=google_embeddings,
-                tavily_tool=tavily_tool,
-                brave_search=brave_search,
-            )
-        return self.chat_services[session_id]
 
-    async def process_message(
-        self, session_id: str, message: str, chat_history: list , tool_type: str
-    ) -> ChatResponse:
+    async def process_message(self, session_id: str, message: str) -> ChatResponse:
         async with self.semaphore:
-            chat_service = self.get_chat_service(session_id,tool_type=tool_type)
-            result = chat_service.process_input(message)
-            if asyncio.iscoroutine(result):
-                response = await result
-            else:
-                response = result
-            return ChatResponse(message=response, sources=[])
+            DB_URI = "postgresql://postgres:postgres@localhost:5434/postgres"
+            async with AsyncPostgresSaver.from_conn_string(DB_URI) as checkpointer:
+                self.chat_services.build_graph(checkpointer=checkpointer)
+                
+                result = self.chat_services.stream_input(user_input=message, thread_id=session_id)
+                
+                if isinstance(result, AsyncGenerator):
+                    full_response = ""
+                    async for chunk in result:
+                        full_response += chunk
+                    response = full_response
+                elif asyncio.iscoroutine(result):
+                    response = await result
+                else:
+                    response = result
+                
+                return ChatResponse(message=response, sources=[])
 
     async def stream_message(
-        self, session_id: str, message: str, chat_history: list , tool_type: str
+        self, session_id: str, message: str , tool_type: str
     ) -> AsyncGenerator[str, None]:
         async with self.semaphore:
-            chat_service = self.get_chat_service(session_id,tool_type=tool_type)
-            async for token in chat_service.stream_input(message):
-                if token and token.strip():
-                    yield token
+            self.get_chat_service(session_id,tool_type=tool_type)
+            response = await self.process_message(session_id=session_id, message=message)
+            if response.message and response.message.strip():
+                yield response.message
 
 async def get_chat_history(
     session_id: str, db: AsyncSession, force_db: bool = False
