@@ -171,7 +171,10 @@ export default function StockPage() {
         const data = await response.json()
         setStockInfo(data)
         if (data.charts_data) {
-          const parsedData = parseChartData(data.charts_data)
+          const parsedData = parseChartData(
+            data.charts_data,
+            symbol.toUpperCase()
+          )
           setChartData(parsedData)
         }
       } catch (err) {
@@ -185,7 +188,10 @@ export default function StockPage() {
     fetchStockInfo()
   }, [symbol])
 
-  const parseChartData = (chartsData: string): ChartDataPoint[] => {
+  const parseChartData = (
+    chartsData: string,
+    symbol: string
+  ): ChartDataPoint[] => {
     const data = JSON.parse(chartsData)
     const timestamps = Object.keys(data).map(ts => parseInt(ts))
     timestamps.sort((a, b) => a - b)
@@ -194,11 +200,11 @@ export default function StockPage() {
       const values = data[timestamp.toString()]
       return {
         date,
-        close: values["('Close', 'NVDA')"],
-        high: values["('High', 'NVDA')"],
-        low: values["('Low', 'NVDA')"],
-        open: values["('Open', 'NVDA')"],
-        volume: values["('Volume', 'NVDA')"]
+        close: values[`('Close', '${symbol}')`],
+        high: values[`('High', '${symbol}')`],
+        low: values[`('Low', '${symbol}')`],
+        open: values[`('Open', '${symbol}')`],
+        volume: values[`('Volume', '${symbol}')`]
       }
     })
   }
@@ -423,8 +429,8 @@ export default function StockPage() {
                     <div
                       className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
                         stock.marketState === 'REGULAR'
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-gray-100 text-gray-800'
+                          ? ' text-green-800'
+                          : 'text-gray-800'
                       }`}
                     >
                       <Activity className="h-3 w-3 mr-1" />

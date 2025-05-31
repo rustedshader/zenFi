@@ -38,7 +38,7 @@ export function Chat({
   const { isLoggedIn, logout } = useAuth()
   const initializedRef = useRef(false)
   const [isDeepSearch, setDeepSearch] = useState<boolean>(
-    isDeepResearch ?? false
+    Boolean(isDeepResearch)
   )
 
   // Combined effect for session creation and initial query

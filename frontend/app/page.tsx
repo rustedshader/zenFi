@@ -1,73 +1,16 @@
 'use client'
-
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/contexts/auth-context'
-import { useRouter } from 'next/navigation'
-import { useEffect, useState, useCallback } from 'react' // Added useCallback
-// import Textarea from 'react-textarea-autosize'
-import { toast } from 'sonner'
-import {
-  TrendingUp,
-  Star,
-  BarChart3,
-  Activity,
-  Globe,
-  Sparkles,
-  Microscope,
-  ArrowRight
-} from 'lucide-react'
+import { useState } from 'react'
+import { Sparkles } from 'lucide-react'
 import MarketOverview from '@/components/homepage/market-overview'
 import PinnedStocks from '@/components/homepage/pinned-stocks'
-import { Textarea } from '@/components/ui/textarea'
 import HomeSearch from '@/components/homepage/home-search'
 
 export default function Page() {
-  const router = useRouter()
   const [error, setError] = useState<string | null>(null)
-  const [input, setInput] = useState('')
-  const [isLoading, setIsLoading] = useState(false)
-  const { isLoggedIn, isLoading: isAuthLoading } = useAuth()
-  const [isDeepResearch, setIsDeepResearch] = useState(false)
-
-  useEffect(() => {
-    if (!isAuthLoading && !isLoggedIn) {
-      router.push('/login')
-    }
-  }, [router, isLoggedIn, isAuthLoading])
-
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault()
-    if (!input.trim()) return
-
-    setIsLoading(true)
-    try {
-      const response = await fetch('/api/sessions/init', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: input.trim(), isDeepResearch })
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || 'Failed to create session')
-      }
-
-      const data = await response.json()
-      router.push(
-        `/chat/${data.session_id}?query=${encodeURIComponent(
-          input.trim()
-        )}&isDeepResearch=${isDeepResearch}`
-      )
-    } catch (error) {
-      console.error('Error:', error)
-      setError('Failed to initialize chat. Please try again later.')
-      toast.error('Failed to create chat session')
-      router.push('/')
-    } finally {
-      setIsLoading(false)
-    }
-  }
+  const { isLoading: isAuthLoading } = useAuth()
 
   if (isAuthLoading) {
     return (
@@ -109,26 +52,30 @@ export default function Page() {
     <div className="flex min-h-screen flex-col pb-32">
       <MarketOverview />
       <div className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <div className="lg:col-span-1 space-y-6">
-            <PinnedStocks />
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-stretch">
+          <div className="lg:col-span-1 flex flex-col space-y-6">
+            <div className="flex-1">
+              <PinnedStocks />
+            </div>
           </div>
-          <div className="lg:col-span-2">
-            <Card className="shadow-md border h-fit">
-              <CardContent className="p-8">
-                <div className="text-center mb-8">
+          <div className="lg:col-span-2 flex flex-col">
+            <Card className="shadow-md border flex-1">
+              <CardContent className="p-8 flex flex-col items-center">
+                <div className="text-center mb-6">
                   <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl mb-6 shadow-lg">
                     <Sparkles className="h-10 w-10 drop-shadow" />
                   </div>
                   <h1 className="text-4xl font-bold mb-3">
                     Welcome to ZenFi AI
                   </h1>
-                  <p className="text-xl opacity-50 mb-8 max-w-2xl mx-auto">
+                  <p className="text-xl opacity-50 mb-6 max-w-2xl mx-auto">
                     Your intelligent finance assistant for smarter investment
                     decisions
                   </p>
                 </div>
-                <HomeSearch />
+                <div className="w-full">
+                  <HomeSearch />
+                </div>
               </CardContent>
             </Card>
           </div>

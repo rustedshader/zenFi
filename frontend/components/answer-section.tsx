@@ -6,6 +6,8 @@ import { Button } from './ui/button'
 import { SearchResults } from './search-results'
 import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
+import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism'
 
 interface AnswerSectionProps {
   content: string
@@ -71,7 +73,7 @@ export function AnswerSection({
                 remarkPlugins={[remarkGfm]}
                 components={{
                   p: ({ children }) => (
-                    <p className="text-base leading-relaxed whitespace-pre-wrap text-gray-700 dark:text-gray-200">
+                    <p className="text-base leading-relaxed whitespace-pre-wrap">
                       {children}
                     </p>
                   ),
@@ -85,7 +87,7 @@ export function AnswerSection({
                           href={href}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300"
+                          className="text-blue-500"
                         >
                           {children}
                         </a>
@@ -96,41 +98,31 @@ export function AnswerSection({
                         href={href}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300"
+                        className="text-blue-500"
                       >
                         {children}
                       </a>
                     )
                   },
-                  code: ({ inline, className, children, ...props }) => {
+                  code({ node, inline, className, children, ...props }) {
                     const match = /language-(\w+)/.exec(className || '')
                     return !inline && match ? (
-                      <code
-                        className={className}
+                      <SyntaxHighlighter
+                        style={vscDarkPlus as any}
+                        language={match[1]}
+                        PreTag="div"
+                        className="rounded-md"
                         {...props}
-                        style={{
-                          backgroundColor: 'transparent',
-                          padding: '0.5rem',
-                          borderRadius: '0.375rem',
-                          fontSize: '0.875rem',
-                          lineHeight: '1.5',
-                          display: 'block',
-                          overflowX: 'auto'
-                        }}
                       >
-                        {children}
-                      </code>
+                        {String(children).replace(/\n$/, '')}
+                      </SyntaxHighlighter>
                     ) : (
                       <code
-                        className={className}
+                        className={cn(
+                          'rounded bg-muted px-1 py-0.5 font-mono text-sm',
+                          className
+                        )}
                         {...props}
-                        style={{
-                          backgroundColor: 'rgba(0, 0, 0, 0.05)',
-                          padding: '0.2em 0.4em',
-                          borderRadius: '0.25rem',
-                          fontSize: '0.875em',
-                          lineHeight: '1.5'
-                        }}
                       >
                         {children}
                       </code>

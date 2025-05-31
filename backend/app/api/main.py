@@ -172,6 +172,10 @@ class ChatServiceManager:
     async def stream_message(
         self, session_id: str, message: str, isDeepSearch: bool
     ) -> AsyncGenerator[str, None]:
+        if not message or not message.strip():
+            yield 'data: {"type":"error","finishReason":"error","error":"Message cannot be empty"}\n\n'
+            return
+
         async with self.semaphore:
             self.get_chat_service(isDeepSearch=isDeepSearch)
             response = await self.process_message(

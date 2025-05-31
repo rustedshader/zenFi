@@ -6,6 +6,8 @@ import { useEffect, useRef, useState } from 'react'
 import { Textarea } from './ui/textarea'
 import { Button } from './ui/button'
 import { motion } from 'framer-motion'
+import { toast } from 'sonner'
+import { cn } from '@/lib/utils'
 
 interface Message {
   id?: string
@@ -46,33 +48,58 @@ export function ChatPanel({
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const [isComposing, setIsComposing] = useState(false)
 
+  const autoResize = () => {
+    const textarea = inputRef.current
+    if (textarea) {
+      textarea.style.height = 'auto'
+      textarea.style.height = `${textarea.scrollHeight}px`
+    }
+  }
+
+  useEffect(() => {
+    autoResize()
+  }, [input])
+
   const deepResearchToggle = () => {
     const newIsDeepSearch = !currentisDeepSearch
     onDeepSearchChange(newIsDeepSearch)
+    toast.dismiss() // Dismiss any existing toasts before showing a new one
+    toast.info(
+      newIsDeepSearch ? 'Deep Research enabled' : 'Deep Research disabled'
+    )
     console.log('isDeepSearch:', newIsDeepSearch)
   }
 
   return (
-    <div className="fixed bottom-0 left-0 w-full">
-      <div className="mx-auto max-w-3xl px-2 sm:px-4 pb-4 sm:pb-6">
+    <div className="fixed bottom-0 left-0 w-full bg-gradient-to-t from-background to-transparent">
+      <div className="mx-auto max-w-3xl px-4 pb-6">
         <motion.form
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
           onSubmit={handleSubmit}
           className="relative"
         >
-          <div className="relative rounded-2xl border border-gray-200 shadow-lg overflow-hidden transition-colors">
+          <div className="relative rounded-2xl border border-gray-200 shadow-lg transition-colors bg-background">
             <Textarea
               ref={inputRef}
               name="input"
               rows={1}
               placeholder="How can I help?"
               value={input}
-              onChange={handleInputChange}
+              onChange={e => {
+                handleInputChange(e)
+                autoResize()
+              }}
               onCompositionStart={() => setIsComposing(true)}
               onCompositionEnd={() => setIsComposing(false)}
               disabled={isLoading}
-              className="w-full resize-none focus:outline-none py-4 px-6 pr-20 text-base disabled:opacity-50 disabled:cursor-not-allowed"
+              className={cn(
+                'w-full resize-none focus:outline-none py-4 px-6 pr-24 text-base',
+                'rounded-2xl border-none focus:ring-2',
+                'min-h-[48px] max-h-[200px] scrollbar-hide',
+                isLoading && 'opacity-50 cursor-not-allowed'
+              )}
               onKeyDown={e => {
                 if (e.key === 'Enter' && !e.shiftKey && !isComposing) {
                   e.preventDefault()
@@ -82,6 +109,7 @@ export function ChatPanel({
                   }
                 }
               }}
+              aria-label="Chat input"
             />
             <div className="absolute right-3 bottom-3 flex items-center space-x-2">
               <Button
@@ -96,29 +124,55 @@ export function ChatPanel({
                     ? 'Disable Deep Research'
                     : 'Enable Deep Research'
                 }
-                className="border rounded-xl px-2 flex items-center space-x-1"
+                className={cn(
+                  'flex items-center space-x-1 rounded-xl px-3 py-1.5',
+                  currentisDeepSearch
+                    ? 'bg-blue-900 text-blue-400'
+                    : 'hover:bg-gray-800'
+                )}
               >
-                <Microscope
-                  className={
-                    currentisDeepSearch ? 'text-blue-600' : 'text-gray-500'
-                  }
-                />
-                <span className="text-sm">DeepResearch</span>
+                <Microscope className="h-4 w-4" />
+                <span className="text-sm">Deep</span>
               </Button>
               <Button
                 type="submit"
                 disabled={isLoading || input.trim().length === 0}
-                className="rounded-xl p-2.5 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-lg"
+                className={cn(
+                  'rounded-xl p-2.5 transition-all duration-200 bg-gray-800 hover:bg-gray-700 text-white',
+                  'disabled:opacity-50 disabled:cursor-not-allowed'
+                )}
+                aria-label="Submit chat query"
               >
                 {isLoading ? (
-                  <Square className="size-5" />
+                  <svg
+                    className="animate-spin h-5 w-5"
+                    viewBox="0 0 24 24"
+                    aria-label="Loading"
+                  >
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    />
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8v8H4z"
+                    />
+                  </svg>
                 ) : (
-                  <ArrowRight className="size-5" />
+                  <ArrowRight className="h-5 w-5" />
                 )}
               </Button>
             </div>
           </div>
-          <p className="text-xs mt-2 text-center">ZenFi can make mistakes</p>
+          <p className="text-xs text-gray-500 mt-3 text-center">
+            ZenFi may provide inaccurate information. Always verify critical
+            data.
+          </p>
         </motion.form>
       </div>
     </div>

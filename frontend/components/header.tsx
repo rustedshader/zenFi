@@ -50,36 +50,38 @@ export default function Header() {
     return {
       isLive,
       text: isLive ? 'Market Open' : 'Market Closed',
-      color: isLive
-        ? 'text-green-600 bg-green-50 border-green-200'
-        : 'text-red-600 bg-red-50 border-red-200',
+      color: isLive ? 'text-green-600 border' : 'text-red-600 border',
       icon: isLive ? Activity : Clock
     }
   }
 
   useEffect(() => {
     const fetchMarketStatus = async () => {
-      if (!isLoggedIn) return
+      if (!isLoggedIn) {
+        setMarketStatus('') // Clear market status if not logged in
+        return
+      }
 
       try {
-        const response = await fetch('/api/dashboard/market_status')
+        const response = await fetch('/api/dashboard/market_status', {
+          credentials: 'include' // Include cookies
+        })
         if (!response.ok) throw new Error('Failed to fetch market info')
         const data: DashboardInfo = await response.json()
         setMarketStatus(data.market_status)
       } catch (error) {
         console.error('Error fetching market status:', error)
+        setMarketStatus('')
       }
     }
 
     fetchMarketStatus()
-
     const interval = setInterval(fetchMarketStatus, 30000)
     return () => clearInterval(interval)
   }, [isLoggedIn])
 
   const handleLogout = () => {
-    logout()
-    router.push('/login')
+    router.push(`/login`)
   }
 
   const handleStockSearch = (e: React.FormEvent) => {
@@ -99,7 +101,7 @@ export default function Header() {
   }
 
   const fetchStockResults = async (query: string) => {
-    if (!query.trim()) {
+    if (!query.trim() || !isLoggedIn) {
       setSearchResults([])
       setIsDropdownOpen(false)
       return
@@ -109,10 +111,12 @@ export default function Header() {
     try {
       const response = await fetch(`/api/stocks/search`, {
         method: 'POST',
-        body: JSON.stringify({ input_query: query })
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ input_query: query }),
+        credentials: 'include' // Include cookies
       })
-
-      console.log(response.body)
 
       if (!response.ok) {
         throw new Error('Failed to fetch stock data')
@@ -129,7 +133,6 @@ export default function Header() {
     }
   }
 
-  // Debounce the search input
   useEffect(() => {
     if (debounceRef.current) {
       clearTimeout(debounceRef.current)
@@ -154,9 +157,7 @@ export default function Header() {
     <header className="border-b shadow-sm">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
-          {/* Left section - Logo and Market Status */}
           <div className="flex items-center gap-6">
-            {/* Logo switches based on theme */}
             <span className="relative h-10 w-10">
               <Image
                 src="/zenfi_logo.png"
@@ -164,17 +165,16 @@ export default function Header() {
                 height={40}
                 width={40}
                 priority
-                className="block "
+                className="block"
               />
             </span>
             <Link href="/" className="flex items-center gap-2">
               <h1 className="text-xl font-bold">ZenFi AI</h1>
             </Link>
 
-            {/* Market Status Badge - Only show when logged in */}
             {isLoggedIn && marketStatus && (
               <div
-                className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium border ${marketStatusInfo.color}`}
+                className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-2xl text-sm font-medium border ${marketStatusInfo.color}`}
               >
                 <marketStatusInfo.icon className="h-3.5 w-3.5" />
                 {marketStatusInfo.text}
@@ -185,7 +185,6 @@ export default function Header() {
             )}
           </div>
 
-          {/* Center section - Stock Search Bar (Only show when logged in) */}
           {isLoggedIn && (
             <div className="flex-1 max-w-md mx-8 relative">
               <form onSubmit={handleStockSearch} className="relative">
@@ -194,12 +193,11 @@ export default function Header() {
                   placeholder="Search stocks (e.g., RELIANCE, TCS)"
                   value={stockSearch}
                   onChange={e => setStockSearch(e.target.value)}
-                  className="pl-10 pr-4  border focus:border-transparent"
+                  className="pl-10 pr-4 border focus:border-transparent"
                 />
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               </form>
 
-              {/* Search Results Dropdown */}
               {isDropdownOpen && searchResults.length > 0 && (
                 <div className="absolute z-50 w-full mt-1 bg-background border rounded-lg shadow-lg max-h-96 overflow-y-auto">
                   {isLoading ? (
@@ -234,32 +232,8 @@ export default function Header() {
           )}
 
           <div className="flex items-center gap-2">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="icon">
-                  <Sun className="h-[1.2rem] w-[1.2rem] scale-100 rotate-0 transition-all dark:scale-0 dark:-rotate-90" />
-                  <Moon className="absolute h-[1.2rem] w-[1.2rem] scale-0 rotate-90 transition-all dark:scale-100 dark:rotate-0" />
-                  <span className="sr-only">Toggle theme</span>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => setTheme('light')}>
-                  Light
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setTheme('dark')}>
-                  Dark
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setTheme('system')}>
-                  System
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-
             {isLoggedIn ? (
               <>
-                <Button variant="ghost" onClick={() => router.push('/')}>
-                  Home
-                </Button>
                 <Button
                   variant="ghost"
                   onClick={() => router.push('/portfolio')}
@@ -308,6 +282,26 @@ export default function Header() {
                 </Button>
               </>
             )}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="icon">
+                  <Sun className="h-[1.2rem] w-[1.2rem] scale-100 rotate-0 transition-all dark:scale-0 dark:-rotate-90" />
+                  <Moon className="absolute h-[1.2rem] w-[1.2rem] scale-0 rotate-90 transition-all dark:scale-100 dark:rotate-0" />
+                  <span className="sr-only">Toggle theme</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => setTheme('light')}>
+                  Light
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setTheme('dark')}>
+                  Dark
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setTheme('system')}>
+                  System
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
       </div>

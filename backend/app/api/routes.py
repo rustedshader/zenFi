@@ -834,6 +834,11 @@ async def stream_chat(
         isDeepResearch = input_data.isDeepSearch
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid session id format")
+
+    # Validate that the message is not empty or just whitespace
+    if not input_data.message or not input_data.message.strip():
+        raise HTTPException(status_code=400, detail="Message cannot be empty")
+
     stmt = select(ChatSession).where(
         ChatSession.id == session_uuid, ChatSession.user_id == current_user.id
     )
@@ -843,6 +848,8 @@ async def stream_chat(
         raise HTTPException(
             status_code=404, detail="Session not found or not authorized"
         )
+
+    # Save the user's message
     user_message = ChatMessage(
         session_id=session.id,
         sender="user",
@@ -868,18 +875,20 @@ async def stream_chat(
                             full_response += part
                             yield f'data: {{"type":"token","content":{json.dumps(part)}}}\n\n'
                             await asyncio.sleep(0.01)
-            bot_message = ChatMessage(
-                session_id=session.id,
-                sender="bot",
-                message=full_response,
-                timestamp=datetime.datetime.now(datetime.timezone.utc),
-                sources=sources,
-            )
-            db.add(bot_message)
-            await db.commit()
-            asyncio.create_task(
-                get_chat_history(input_data.session_id, db, force_db=True)
-            )
+            # Only save the bot message if there’s a valid response
+            if full_response.strip():
+                bot_message = ChatMessage(
+                    session_id=session.id,
+                    sender="bot",
+                    message=full_response,
+                    timestamp=datetime.datetime.now(datetime.timezone.utc),
+                    sources=sources,
+                )
+                db.add(bot_message)
+                await db.commit()
+                asyncio.create_task(
+                    get_chat_history(input_data.session_id, db, force_db=True)
+                )
             yield 'data: {"type":"complete","finishReason":"stop"}\n\n'
         except asyncio.CancelledError:
             yield 'data: {"type":"error","finishReason":"cancelled"}\n\n'

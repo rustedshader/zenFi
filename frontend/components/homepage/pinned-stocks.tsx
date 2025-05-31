@@ -14,6 +14,7 @@ interface Stock {
   price: number
   change: number
   changePercent: number
+  currency: string
 }
 
 interface StockData {
@@ -53,7 +54,8 @@ export default function PinnedStocks() {
         name: stock.symbol,
         price: stock.fast_info.lastPrice,
         change: parseFloat(stock.stock_points_change),
-        changePercent: parseFloat(stock.stocks_percentage_change)
+        changePercent: parseFloat(stock.stocks_percentage_change),
+        currency: stock.fast_info.currency
       }))
       setPinnedStocks(stocks)
     } catch (err) {
@@ -149,7 +151,7 @@ export default function PinnedStocks() {
                 </div>
                 <div className="text-right mr-3">
                   <p className="font-semibold">
-                    ₹{stock.price.toLocaleString('en-IN')}
+                    {stock.price.toLocaleString()} {stock.currency}
                   </p>
                   <p
                     className={`text-sm font-medium ${
