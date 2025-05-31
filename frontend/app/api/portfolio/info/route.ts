@@ -1,8 +1,9 @@
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 
-export async function GET() {
+export async function POST(req: Request) {
   try {
+    const { portfolio_id } = await req.json()
     const cookieStore = await cookies()
     const token = cookieStore.get('jwt_token')?.value
 
@@ -11,7 +12,7 @@ export async function GET() {
     }
 
     const response = await fetch(
-      `${process.env.NEXT_PUBLIC_BACKEND_API_URL}/dashboard/market_status`,
+      `${process.env.NEXT_PUBLIC_BACKEND_API_URL}/portfolio/${portfolio_id}`,
       {
         method: 'GET',
         headers: {

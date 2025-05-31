@@ -122,7 +122,7 @@ export default function AddStockOverlay({
         <div className="relative mt-4">
           <Input
             type="text"
-            placeholder="Search stocks (e.g., RELIANCE, TCS)"
+            placeholder="Search stocks (e.g., RELIANCE, NVIDIA)"
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
             className="pl-10 pr-4"

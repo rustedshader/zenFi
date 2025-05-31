@@ -190,7 +190,7 @@ export default function Header() {
               <form onSubmit={handleStockSearch} className="relative">
                 <Input
                   type="text"
-                  placeholder="Search stocks (e.g., RELIANCE, TCS)"
+                  placeholder="Search stocks (e.g., RELIANCE, NVIDIA)"
                   value={stockSearch}
                   onChange={e => setStockSearch(e.target.value)}
                   className="pl-10 pr-4 border focus:border-transparent"

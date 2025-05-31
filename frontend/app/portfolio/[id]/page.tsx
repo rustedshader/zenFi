@@ -130,12 +130,16 @@ export default function PortfolioDetails() {
   const debounceRef = useRef<NodeJS.Timeout | null>(null)
 
   const portfolioId = params.id as string
-
+  console.log(portfolioId)
   useEffect(() => {
     const fetchPortfolio = async () => {
       setIsLoading(true)
       try {
-        const response = await fetch(`/api/portfolio/${portfolioId}`)
+        const response = await fetch(`/api/portfolio/info`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ portfolio_id: portfolioId })
+        })
         if (!response.ok) throw new Error('Failed to fetch portfolio')
         const data = await response.json()
         setPortfolio(data)
@@ -374,7 +378,7 @@ export default function PortfolioDetails() {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <div className="bg-card border-b sticky top-0 z-10">
+      <div className="bg-card  sticky">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
@@ -405,15 +409,15 @@ export default function PortfolioDetails() {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="text-center p-6 bg-blue-50 dark:bg-blue-950/50 rounded-lg border">
+              <div className="text-center p-6 rounded-lg border">
                 <p className="text-sm text-muted-foreground mb-2">
                   Total Portfolio Value
                 </p>
-                <p className="text-3xl font-bold text-blue-600">
+                <p className="text-3xl font-bold ">
                   {formatCurrency(portfolio.total_value_inr)}
                 </p>
               </div>
-              <div className="text-center p-6 bg-green-50 dark:bg-green-950/50 rounded-lg border">
+              <div className="text-center p-6  rounded-lg border">
                 <p className="text-sm text-muted-foreground mb-2">
                   Today's Gain/Loss
                 </p>
@@ -432,7 +436,7 @@ export default function PortfolioDetails() {
                   )}
                 </p>
               </div>
-              <div className="text-center p-6 bg-purple-50 dark:bg-purple-950/50 rounded-lg border">
+              <div className="text-center p-6  rounded-lg border">
                 <p className="text-sm text-muted-foreground mb-2">
                   Total Gain/Loss
                 </p>
@@ -843,7 +847,7 @@ export default function PortfolioDetails() {
                     id="identifier"
                     value={stockSearch}
                     onChange={e => setStockSearch(e.target.value)}
-                    placeholder="Search stocks (e.g., RELIANCE, TCS)"
+                    placeholder="Search stocks (e.g., RELIANCE, NVIDIA)"
                     className="pl-10"
                   />
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />

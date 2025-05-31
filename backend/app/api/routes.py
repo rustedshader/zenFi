@@ -357,6 +357,7 @@ async def get_portfolio(
                             stock_last_price - asset_purchase_price
                         ) * asset_quantity
                         exchange_rate = get_exchange_rate(stock_currency, "INR")
+                        exchange_rate = 1
 
                         value_base = value_asset_currency * exchange_rate
                         day_gain_base = day_gain_asset_currency * exchange_rate
