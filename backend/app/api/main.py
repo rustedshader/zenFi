@@ -6,33 +6,29 @@ import datetime
 from uuid import UUID as uuid_UUID
 
 from dotenv import load_dotenv
-from fastapi import  Depends, HTTPException
+from fastapi import Depends, HTTPException
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
-from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.future import select
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
-from sqlalchemy.orm import sessionmaker, declarative_base
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 import sqlalchemy
 from passlib.context import CryptContext
-from typing import AsyncGenerator, List
+from typing import AsyncGenerator, Dict, List
 
-from langchain_google_community import GoogleSearchAPIWrapper
 from langchain_google_genai import (
     ChatGoogleGenerativeAI,
-    GoogleGenerativeAIEmbeddings,
     HarmBlockThreshold,
     HarmCategory,
 )
-from langchain_community.tools.tavily_search import TavilySearchResults
-from langchain_community.tools import BraveSearch
 from app.chat_provider.service.chat_service import ChatService
 from redis.asyncio import Redis
-from app.api.api_models import  Base, ChatMessage, ChatResponse, User
-from pydantic import SecretStr
-
+from app.api.api_models import Base, ChatMessage, ChatResponse, User
 from app.chat_provider.service.deepsearch_service import DeepSearchChatService
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+
+from app.chat_provider.service.portfolio_summary_service import (
+    PortfolioSummaryService,
+)
 
 load_dotenv()
 
@@ -43,15 +39,18 @@ redis_client = Redis.from_url(redis_url, decode_responses=True)
 engine = create_async_engine(
     sqlalchemy.engine.url.URL.create(
         drivername="postgresql+asyncpg",
-        username=os.environ.get("DB_USER", "postgres"),
-        password=os.environ.get("DB_PASS", "mysecretpassword"),
-        host=os.environ.get("INSTANCE_HOST", "localhost"),
-        port=int(os.environ.get("DB_PORT", "5432")),
-        database=os.environ.get("DB_NAME", "postgres"),
+        username=os.environ.get("APP_DB_USER", "postgres"),
+        password=os.environ.get("APP_DB_PASS", "mysecretpassword"),
+        host=os.environ.get("APP_INSTANCE_HOST", "localhost"),
+        port=int(os.environ.get("APP_DB_PORT", "5432")),
+        database=os.environ.get("APP_DB_NAME", "postgres"),
     ),
     echo=False,
 )
-AsyncSessionLocal = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+AsyncSessionLocal = async_sessionmaker(
+    engine, class_=AsyncSession, expire_on_commit=False
+)
+
 
 async def init_db():
     async with engine.begin() as conn:
@@ -69,14 +68,16 @@ def verify_password(plain_password, hashed_password):
     return pwd_context.verify(plain_password, hashed_password)
 
 
-SECRET_KEY = os.environ.get("SECRET_KEY", "some-secrey-key")
+SECRET_KEY = os.environ.get("JWT_SECRET_KEY", "some-secrey-key")
 ALGORITHM = "HS256"
-JWT_EXPIRE_TIME = int(os.environ.get("JWT_EXPIRE_TIME", 720))
+JWT_EXPIRE_TIME = int(os.environ.get("JWT_EXPIRE_TIME", 86400))
 
 
-def create_access_token(sub: str , name: str):
-    expire =  datetime.datetime.now(datetime.timezone.utc) + (datetime.timedelta(minutes=JWT_EXPIRE_TIME))
-    jwt_payload = {"sub": sub , "name": name, "exp": expire}
+def create_access_token(sub: str, name: str):
+    expire = datetime.datetime.now(datetime.timezone.utc) + (
+        datetime.timedelta(minutes=JWT_EXPIRE_TIME)
+    )
+    jwt_payload = {"sub": sub, "name": name, "exp": expire}
     return jwt.encode(jwt_payload, SECRET_KEY, algorithm=ALGORITHM)
 
 
@@ -98,8 +99,8 @@ async def get_current_user(
     )
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        username: str = payload.get("sub")
-        if not username:
+        username = payload.get("sub")
+        if not isinstance(username, str) or not username:
             raise credentials_exception
     except JWTError:
         raise credentials_exception
@@ -119,11 +120,7 @@ safety_settings = {
     HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
 }
 
-GEMINI_API_KEY = os.environ.get("GOOGLE_GEMINI_API_KEY","")
-BRAVE_API_KEY = os.environ.get("BRAVE_SEARCH_API_KEY", "")
-GOOGLE_SEARCH_API_KEY = os.environ.get("GOOGLE_SEARCH_API_KEY")
-TAVILY_SEARCH_API_KEY = os.environ.get("TAVILY_API_KEY")
-GOOGLE_CSE_ID = os.environ.get("GOOGLE_SEACH_ENGINE_ID")
+GEMINI_API_KEY = os.environ.get("GOOGLE_GEMINI_API_KEY", "")
 
 deepresearch_llm = ChatGoogleGenerativeAI(
     model="gemini-2.5-pro-preview-03-25",
@@ -136,35 +133,16 @@ quicksearch_llm = ChatGoogleGenerativeAI(
     api_key=GEMINI_API_KEY,
     safety_settings=safety_settings,
 )
-search = GoogleSearchAPIWrapper(
-    google_api_key=GOOGLE_SEARCH_API_KEY, google_cse_id=GOOGLE_CSE_ID
-)
-tavily_tool = TavilySearchResults(tavily_api_key=TAVILY_SEARCH_API_KEY)
-
-
-google_embeddings = GoogleGenerativeAIEmbeddings(
-    model="models/text-embedding-004", google_api_key=SecretStr(GEMINI_API_KEY)
-)
-brave_search = BraveSearch.from_api_key(
-    api_key=BRAVE_API_KEY, search_kwargs={"count": 3}
-)
 
 
 class ChatServiceManager:
     def __init__(self):
-        self.chat_services = {}
-        self.semaphore = asyncio.Semaphore(5)  
+        self.semaphore = asyncio.Semaphore(5)
 
-    def get_chat_service(self, session_id: str,tool_type: str):
-        # if tool_type == "deepresearch":
-        #     self.chat_services = DeepSearchChatService(
-        #         llm=deepresearch_llm,
-        #         google_search_wrapper=search,
-        #         google_embedings=google_embeddings,
-        #         tavily_tool=tavily_tool,
-        #         brave_search=brave_search,
-        #     )
-        # else:
+    def get_chat_service(self, isDeepSearch: bool):
+        if isDeepSearch:
+            self.chat_services = DeepSearchChatService(model=quicksearch_llm)
+        else:
             self.chat_services = ChatService(
                 model=quicksearch_llm,
             )
@@ -174,29 +152,34 @@ class ChatServiceManager:
             DB_URI = "postgresql://postgres:postgres@localhost:5434/postgres"
             async with AsyncPostgresSaver.from_conn_string(DB_URI) as checkpointer:
                 self.chat_services.build_graph(checkpointer=checkpointer)
-                
-                result = self.chat_services.stream_input(user_input=message, thread_id=session_id)
-                
+
+                result = self.chat_services.stream_input(
+                    user_input=message, thread_id=session_id
+                )
+
                 if isinstance(result, AsyncGenerator):
                     full_response = ""
                     async for chunk in result:
                         full_response += chunk
                     response = full_response
                 elif asyncio.iscoroutine(result):
-                    response = await result
+                    response = result
                 else:
                     response = result
-                
+
                 return ChatResponse(message=response, sources=[])
 
     async def stream_message(
-        self, session_id: str, message: str , tool_type: str
+        self, session_id: str, message: str, isDeepSearch: bool
     ) -> AsyncGenerator[str, None]:
         async with self.semaphore:
-            self.get_chat_service(session_id,tool_type=tool_type)
-            response = await self.process_message(session_id=session_id, message=message)
+            self.get_chat_service(isDeepSearch=isDeepSearch)
+            response = await self.process_message(
+                session_id=session_id, message=message
+            )
             if response.message and response.message.strip():
                 yield response.message
+
 
 async def get_chat_history(
     session_id: str, db: AsyncSession, force_db: bool = False
@@ -225,3 +208,39 @@ async def get_chat_history(
 
 
 token_splitter = re.compile(r"(\s+)")
+
+
+async def generate_ai_portfolio_summary(
+    portfolio_name: str,
+    portfolio_value: float,
+    total_day_gain_inr: float,
+    total_gain_inr: float,
+    assets: List[Dict],
+) -> str:
+    portfolio_summary_service = PortfolioSummaryService(model=quicksearch_llm)
+
+    assets_info = ""
+    for asset in assets:
+        assets_info += f"""
+        - Asset: {asset.get("identifier", "N/A")}
+          Type: {asset.get("asset_type", "N/A")}
+          Quantity: {asset.get("quantity", 0)}
+          Purchase Price: {asset.get("purchase_price", 0)}
+          Current Value: {asset.get("value_base", 0)}
+          Day Gain: {asset.get("day_gain_base", 0)} ({asset.get("day_gain_percent", 0)}%)
+          Total Gain: {asset.get("total_gain_base", 0)} ({asset.get("total_gain_percent", 0)}%)
+          News: {", ".join([news.get("title", "") for news in asset.get("news", [])]) if asset.get("news") else "No news available"}
+        """
+
+    input_prompt = f"""
+    Portfolio Name: {portfolio_name}
+    Portfolio Value: {portfolio_value:.2f} INR
+    Total Day Gain: {total_day_gain_inr:.2f} INR
+    Total Gain: {total_gain_inr:.2f} INR
+    Assets:
+    {assets_info}
+
+    Generate a concise and professional Portfolio Summary.
+    """
+
+    return await portfolio_summary_service.get_response(input_prompt)

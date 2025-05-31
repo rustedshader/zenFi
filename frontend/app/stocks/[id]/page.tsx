@@ -28,8 +28,31 @@ import {
   Clock,
   ChevronLeft,
   ExternalLink,
-  Info
+  Info,
+  Newspaper
 } from 'lucide-react'
+import {
+  CartesianGrid,
+  Line,
+  LineChart,
+  XAxis,
+  YAxis,
+  ResponsiveContainer
+} from 'recharts'
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent
+} from '@/components/ui/chart'
+
+interface ChartDataPoint {
+  date: string
+  close: number
+  high: number
+  low: number
+  open: number
+  volume: number
+}
 
 interface StockInfo {
   stock_information: {
@@ -90,8 +113,32 @@ interface StockInfo {
     regularMarketTime?: number
     marketState?: string
   }
-  yahoo_finance_news?: string
-  duckduckgo_finance_news?: string
+  news: {
+    data: {
+      tickerStream: {
+        stream: Array<{
+          id: string
+          content: {
+            title: string
+            summary: string
+            pubDate: string
+            thumbnail?: {
+              resolutions: Array<{ url: string }>
+            }
+            canonicalUrl: { url: string }
+          }
+        }>
+      }
+    }
+  }
+  charts_data: string
+}
+
+const chartConfig = {
+  close: {
+    label: 'Close Price',
+    color: 'hsl(var(--chart-1))'
+  }
 }
 
 export default function StockPage() {
@@ -101,6 +148,7 @@ export default function StockPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isPinned, setIsPinned] = useState(false)
+  const [chartData, setChartData] = useState<ChartDataPoint[]>([])
 
   const symbol = params.id as string
 
@@ -114,19 +162,18 @@ export default function StockPage() {
       try {
         const response = await fetch('/api/stocks/info', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ symbol: symbol.toUpperCase() })
         })
 
-        if (!response.ok) {
-          throw new Error('Failed to fetch stock information')
-        }
+        if (!response.ok) throw new Error('Failed to fetch stock information')
 
         const data = await response.json()
-        console.log(data)
         setStockInfo(data)
+        if (data.charts_data) {
+          const parsedData = parseChartData(data.charts_data)
+          setChartData(parsedData)
+        }
       } catch (err) {
         setError('Failed to load stock information. Please try again.')
         toast.error('Failed to load stock data')
@@ -138,20 +185,33 @@ export default function StockPage() {
     fetchStockInfo()
   }, [symbol])
 
+  const parseChartData = (chartsData: string): ChartDataPoint[] => {
+    const data = JSON.parse(chartsData)
+    const timestamps = Object.keys(data).map(ts => parseInt(ts))
+    timestamps.sort((a, b) => a - b)
+    return timestamps.map(timestamp => {
+      const date = new Date(timestamp).toLocaleDateString()
+      const values = data[timestamp.toString()]
+      return {
+        date,
+        close: values["('Close', 'NVDA')"],
+        high: values["('High', 'NVDA')"],
+        low: values["('Low', 'NVDA')"],
+        open: values["('Open', 'NVDA')"],
+        volume: values["('Volume', 'NVDA')"]
+      }
+    })
+  }
+
   const formatCurrency = (value?: number, currency: string = 'INR') => {
-    if (typeof value !== 'number' || isNaN(value)) {
-      return '-'
-    }
-    if (currency === 'INR') {
-      return `₹${value.toLocaleString('en-IN')}`
-    }
-    return `$${value.toLocaleString('en-US')}`
+    if (typeof value !== 'number' || isNaN(value)) return '-'
+    return currency === 'INR'
+      ? `₹${value.toLocaleString('en-IN')}`
+      : `$${value.toLocaleString('en-US')}`
   }
 
   const formatLargeNumber = (value?: number) => {
-    if (typeof value !== 'number' || isNaN(value)) {
-      return '-'
-    }
+    if (typeof value !== 'number' || isNaN(value)) return '-'
     if (value >= 1e12) return `₹${(value / 1e12).toFixed(2)}T`
     if (value >= 1e9) return `₹${(value / 1e9).toFixed(2)}B`
     if (value >= 1e7) return `₹${(value / 1e7).toFixed(2)}Cr`
@@ -179,13 +239,9 @@ export default function StockPage() {
       const endpoint = isPinned
         ? '/api/dashboard/stocks/delete'
         : '/api/dashboard/stocks'
-      const method = 'POST'
-
       const response = await fetch(endpoint, {
-        method,
-        headers: {
-          'Content-Type': 'application/json'
-        },
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ symbol: symbol.toUpperCase() })
       })
 
@@ -202,18 +258,18 @@ export default function StockPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen ">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="animate-pulse space-y-6">
-            <div className="h-8 bg-gray-200 rounded w-1/4"></div>
+            <div className="h-8 rounded w-1/4"></div>
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="lg:col-span-2 space-y-6">
-                <div className="bg-white rounded-lg h-64"></div>
-                <div className="bg-white rounded-lg h-48"></div>
+                <div className="rounded-lg h-64"></div>
+                <div className=" rounded-lg h-48"></div>
               </div>
               <div className="space-y-6">
-                <div className="bg-white rounded-lg h-32"></div>
-                <div className="bg-white rounded-lg h-48"></div>
+                <div className=" rounded-lg h-32"></div>
+                <div className=" rounded-lg h-48"></div>
               </div>
             </div>
           </div>
@@ -224,10 +280,10 @@ export default function StockPage() {
 
   if (error || !stockInfo) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center">
         <div className="text-center space-y-4">
           <h1 className="text-2xl font-bold text-red-600">Error</h1>
-          <p className="text-gray-600">{error || 'Stock not found'}</p>
+          <p>{error || 'Stock not found'}</p>
           <Button onClick={() => router.back()} variant="outline">
             <ChevronLeft className="h-4 w-4 mr-2" />
             Go Back
@@ -242,9 +298,8 @@ export default function StockPage() {
   const changePercent = Math.abs(stock.regularMarketChangePercent)
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white border-b sticky top-0 z-10">
+    <div className="min-h-screen">
+      <div className="sticky">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
@@ -258,12 +313,8 @@ export default function StockPage() {
                 Back
               </Button>
               <div>
-                <h1 className="text-2xl font-bold text-gray-900">
-                  {stock.symbol}
-                </h1>
-                <p className="text-sm text-gray-600">
-                  {stock.shortName || stock.longName}
-                </p>
+                <h1 className="text-2xl font-bold">{stock.symbol}</h1>
+                <p className="text-sm">{stock.shortName || stock.longName}</p>
               </div>
             </div>
             <div className="flex items-center space-x-3">
@@ -297,6 +348,39 @@ export default function StockPage() {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Price History Chart */}
+        <Card className="shadow-sm border-0 mb-8">
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <TrendingUp className="h-5 w-5 mr-2" />
+              Price History
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {chartData.length > 0 ? (
+              <ChartContainer config={chartConfig}>
+                <ResponsiveContainer width="100%" height={400}>
+                  <LineChart data={chartData}>
+                    <CartesianGrid vertical={false} />
+                    <XAxis dataKey="date" />
+                    <YAxis />
+                    <ChartTooltip content={<ChartTooltipContent />} />
+                    <Line
+                      type="monotone"
+                      dataKey="close"
+                      stroke="var(--color-close)"
+                      strokeWidth={2}
+                      dot={false}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </ChartContainer>
+            ) : (
+              <p className="text-center">No historical data available</p>
+            )}
+          </CardContent>
+        </Card>
+
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Main Content */}
           <div className="lg:col-span-2 space-y-6">
@@ -306,7 +390,7 @@ export default function StockPage() {
                 <div className="flex items-center justify-between mb-6">
                   <div>
                     <div className="flex items-center space-x-3">
-                      <h2 className="text-3xl font-bold text-gray-900">
+                      <h2 className="text-3xl font-bold">
                         {formatCurrency(stock.currentPrice, stock.currency)}
                       </h2>
                       <div
@@ -349,7 +433,7 @@ export default function StockPage() {
                         : 'Market Closed'}
                     </div>
                     {stock.regularMarketTime && (
-                      <p className="text-xs text-gray-500 mt-1">
+                      <p className="text-xs opacity-100 mt-1">
                         {new Date(
                           stock.regularMarketTime * 1000
                         ).toLocaleString()}
@@ -357,22 +441,20 @@ export default function StockPage() {
                     )}
                   </div>
                 </div>
-
-                {/* Day Range */}
                 <div className="grid grid-cols-2 gap-6">
                   <div>
-                    <h3 className="text-sm font-medium text-gray-700 mb-2">
+                    <h3 className="text-sm font-medium opacity-100 mb-2">
                       Day Range
                     </h3>
                     <div className="space-y-1">
                       <div className="flex justify-between text-sm">
-                        <span className="text-gray-500">Low</span>
+                        <span>Low</span>
                         <span className="font-medium">
                           {formatCurrency(stock.dayLow, stock.currency)}
                         </span>
                       </div>
                       <div className="flex justify-between text-sm">
-                        <span className="text-gray-500">High</span>
+                        <span>High</span>
                         <span className="font-medium">
                           {formatCurrency(stock.dayHigh, stock.currency)}
                         </span>
@@ -380,12 +462,10 @@ export default function StockPage() {
                     </div>
                   </div>
                   <div>
-                    <h3 className="text-sm font-medium text-gray-700 mb-2">
-                      52 Week Range
-                    </h3>
+                    <h3 className="text-sm font-medium  mb-2">52 Week Range</h3>
                     <div className="space-y-1">
                       <div className="flex justify-between text-sm">
-                        <span className="text-gray-500">Low</span>
+                        <span>Low</span>
                         <span className="font-medium">
                           {formatCurrency(
                             stock.fiftyTwoWeekLow,
@@ -394,7 +474,7 @@ export default function StockPage() {
                         </span>
                       </div>
                       <div className="flex justify-between text-sm">
-                        <span className="text-gray-500">High</span>
+                        <span>High</span>
                         <span className="font-medium">
                           {formatCurrency(
                             stock.fiftyTwoWeekHigh,
@@ -408,8 +488,7 @@ export default function StockPage() {
               </CardContent>
             </Card>
 
-            {/* Key Statistics */}
-            <Card className="shadow-sm border-0">
+            <Card className="shadow-sm border">
               <CardHeader>
                 <CardTitle className="flex items-center">
                   <BarChart3 className="h-5 w-5 mr-2" />
@@ -436,7 +515,7 @@ export default function StockPage() {
                     </div>
                     {stock.beta && (
                       <div>
-                        <p className="text-sm text-gray-500">Beta</p>
+                        <p className="text-sm">Beta</p>
                         <p className="font-semibold">{stock.beta.toFixed(2)}</p>
                       </div>
                     )}
@@ -444,7 +523,7 @@ export default function StockPage() {
                   <div className="space-y-4">
                     {stock.trailingPE && (
                       <div>
-                        <p className="text-sm text-gray-500">P/E Ratio</p>
+                        <p className="text-sm">P/E Ratio</p>
                         <p className="font-semibold">
                           {stock.trailingPE.toFixed(2)}
                         </p>
@@ -452,7 +531,7 @@ export default function StockPage() {
                     )}
                     {stock.dividendYield && (
                       <div>
-                        <p className="text-sm text-gray-500">Dividend Yield</p>
+                        <p className="text-sm">Dividend Yield</p>
                         <p className="font-semibold">
                           {(stock.dividendYield * 100).toFixed(2)}%
                         </p>
@@ -460,7 +539,7 @@ export default function StockPage() {
                     )}
                     {stock.bookValue && (
                       <div>
-                        <p className="text-sm text-gray-500">Book Value</p>
+                        <p className="text-sm">Book Value</p>
                         <p className="font-semibold">
                           {formatCurrency(stock.bookValue, stock.currency)}
                         </p>
@@ -470,7 +549,7 @@ export default function StockPage() {
                   <div className="space-y-4">
                     {stock.returnOnEquity && (
                       <div>
-                        <p className="text-sm text-gray-500">ROE</p>
+                        <p className="text-sm">ROE</p>
                         <p className="font-semibold">
                           {(stock.returnOnEquity * 100).toFixed(2)}%
                         </p>
@@ -478,7 +557,7 @@ export default function StockPage() {
                     )}
                     {stock.profitMargins && (
                       <div>
-                        <p className="text-sm text-gray-500">Profit Margin</p>
+                        <p className="text-sm">Profit Margin</p>
                         <p className="font-semibold">
                           {(stock.profitMargins * 100).toFixed(2)}%
                         </p>
@@ -486,7 +565,7 @@ export default function StockPage() {
                     )}
                     {stock.debtToEquity && (
                       <div>
-                        <p className="text-sm text-gray-500">Debt to Equity</p>
+                        <p className="text-sm">Debt to Equity</p>
                         <p className="font-semibold">
                           {stock.debtToEquity.toFixed(2)}
                         </p>
@@ -499,7 +578,7 @@ export default function StockPage() {
 
             {/* Company Overview */}
             {stock.longBusinessSummary && (
-              <Card className="shadow-sm border-0">
+              <Card className="shadow-sm border">
                 <CardHeader>
                   <CardTitle className="flex items-center">
                     <Info className="h-5 w-5 mr-2" />
@@ -507,9 +586,7 @@ export default function StockPage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-gray-700 leading-relaxed">
-                    {stock.longBusinessSummary}
-                  </p>
+                  <p className="leading-relaxed">{stock.longBusinessSummary}</p>
                   {(stock.industry || stock.sector) && (
                     <div className="flex items-center space-x-4 mt-4 pt-4 border-t">
                       {stock.sector && (
@@ -532,10 +609,57 @@ export default function StockPage() {
                 </CardContent>
               </Card>
             )}
+
+            {/* News Section */}
+            {stockInfo.news?.data?.tickerStream?.stream?.length > 0 && (
+              <Card className="shadow-sm border">
+                <CardHeader>
+                  <CardTitle className="flex items-center">
+                    <Newspaper className="h-5 w-5 mr-2" />
+                    Latest News
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-6">
+                    {stockInfo.news.data.tickerStream.stream
+                      .slice(0, 5)
+                      .map((newsItem, index) => (
+                        <div key={index} className="flex space-x-4">
+                          {newsItem.content.thumbnail?.resolutions[0]?.url && (
+                            <img
+                              src={
+                                newsItem.content.thumbnail.resolutions[0].url
+                              }
+                              alt={newsItem.content.title}
+                              className="w-24 h-16 object-cover rounded"
+                            />
+                          )}
+                          <div>
+                            <h3 className="text-sm font-medium">
+                              {newsItem.content.title}
+                            </h3>
+                            <p className="text-xs text-gray-500">
+                              {newsItem.content.summary}
+                            </p>
+                            <a
+                              href={newsItem.content.canonicalUrl.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs text-blue-600 hover:underline"
+                            >
+                              Read more
+                            </a>
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </div>
 
           {/* Sidebar */}
-          <div className="space-y-6">
+          <div className="space-y-6 border rounded">
             {/* Analyst Recommendations */}
             {stock.recommendationKey && (
               <Card className="shadow-sm border-0">
@@ -561,13 +685,10 @@ export default function StockPage() {
                       </p>
                     )}
                   </div>
-
                   {stock.targetMeanPrice && (
                     <div className="space-y-2">
                       <div className="flex justify-between">
-                        <span className="text-sm text-gray-500">
-                          Price Target
-                        </span>
+                        <span className="text-sm">Price Target</span>
                         <span className="font-medium">
                           {formatCurrency(
                             stock.targetMeanPrice,
@@ -576,7 +697,7 @@ export default function StockPage() {
                         </span>
                       </div>
                       {stock.targetHighPrice && stock.targetLowPrice && (
-                        <div className="text-xs text-gray-500">
+                        <div className="text-xs">
                           Range:{' '}
                           {formatCurrency(stock.targetLowPrice, stock.currency)}{' '}
                           -{' '}
@@ -603,7 +724,7 @@ export default function StockPage() {
               <CardContent className="space-y-3">
                 {(stock.address1 || stock.city || stock.country) && (
                   <div className="flex items-start space-x-2">
-                    <MapPin className="h-4 w-4 mt-0.5 text-gray-400" />
+                    <MapPin className="h-4 w-4 mt-0.5 " />
                     <div className="text-sm">
                       {stock.address1 && <div>{stock.address1}</div>}
                       {stock.address2 && <div>{stock.address2}</div>}
@@ -613,14 +734,12 @@ export default function StockPage() {
                     </div>
                   </div>
                 )}
-
                 {stock.phone && (
                   <div className="flex items-center space-x-2">
-                    <Phone className="h-4 w-4 text-gray-400" />
+                    <Phone className="h-4 w-4" />
                     <span className="text-sm">{stock.phone}</span>
                   </div>
                 )}
-
                 {stock.website && (
                   <div className="flex items-center space-x-2">
                     <Globe className="h-4 w-4 text-gray-400" />
@@ -655,14 +774,10 @@ export default function StockPage() {
                       >
                         <div>
                           <p className="font-medium text-sm">{officer.name}</p>
-                          <p className="text-xs text-gray-500">
-                            {officer.title}
-                          </p>
+                          <p className="text-xs">{officer.title}</p>
                         </div>
                         {officer.age && (
-                          <span className="text-xs text-gray-400">
-                            Age {officer.age}
-                          </span>
+                          <span className="text-xs">Age {officer.age}</span>
                         )}
                       </div>
                     ))}

@@ -5,10 +5,17 @@ export default async function ChatSessionPage({
   searchParams
 }: {
   params: Promise<{ sessionId: string }>
-  searchParams: Promise<{ query?: string }>
+  searchParams: Promise<{ query?: string; isDeepResearch?: boolean }>
 }) {
   const { sessionId } = await params
-  const { query } = await searchParams
+  const { query, isDeepResearch } = await searchParams
 
-  return <Chat id={sessionId} sessionId={sessionId} initialQuery={query} />
+  return (
+    <Chat
+      id={sessionId}
+      sessionId={sessionId}
+      initialQuery={query}
+      isDeepResearch={isDeepResearch}
+    />
+  )
 }

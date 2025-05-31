@@ -49,7 +49,7 @@ export function ChatMessages({
             <div
               className={`${
                 message.role === 'user'
-                  ? 'max-w-[95%] sm:max-w-[85%] rounded-3xl px-3 py-2 sm:px-4 sm:py-3 shadow-sm bg-gray-100 dark:bg-gray-900 border prose'
+                  ? 'max-w-[95%] sm:max-w-[85%] rounded-2xl rounded-br-sm px-3 py-2 sm:px-4 sm:py-3 shadow-sm border prose dark:bg-gray-700'
                   : 'max-w-[95%] sm:max-w-[85%]'
               }`}
             >

@@ -1,9 +1,10 @@
 import { cookies } from 'next/headers'
-import { NextResponse } from 'next/server'
 
-export async function POST(req: Request) {
+export async function PUT(_: Request, { params }: { params: { portfolio_id: number , asset_id: number } }) {
     try {
-        const { symbol } = await req.json()
+        const portfolio_id = await params.portfolio_id
+        const asset_id = await params.asset_id
+        const {asset_type,identifier,quantity,purchase_price,purchase_date} = await _.json()
         const cookieStore = await cookies()
         const token = cookieStore.get('jwt_token')?.value
 
@@ -12,14 +13,14 @@ export async function POST(req: Request) {
         }
 
         const response = await fetch(
-            `${process.env.NEXT_PUBLIC_BACKEND_API_URL}/stocks/info`,
+            `${process.env.NEXT_PUBLIC_BACKEND_API_URL}/portfolio/${portfolio_id}/assests/${asset_id}`,
             {
-                method: 'POST',
+                method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
                     Authorization: `Bearer ${token}`
                 },
-                body: JSON.stringify({ symbol })
+                body: JSON.stringify({asset_type,identifier,quantity,purchase_price,purchase_date})
             }
         )
 
@@ -28,8 +29,8 @@ export async function POST(req: Request) {
             console.error('Backend error:', response.status, errorText)
             throw new Error('Network response was not ok')
         }
-        const data = await response.json()
-        return NextResponse.json(data)
+
+        return new Response(response.body)
     } catch (error) {
         console.error('API route error:', error)
         return new Response('Error processing your request', { status: 500 })

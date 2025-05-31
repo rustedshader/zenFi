@@ -414,30 +414,19 @@ def get_stock_point_change(symbol: str) -> str:
         str: A formatted string with the point change (e.g., "+50.25 pts" or "-30.10 pts"), or an error message.
     """
     try:
-        # Get last price and previous close
         last_price_str = get_stock_last_price(symbol)
         previous_close_str = get_stock_previous_close(symbol)
-
-        # Check for errors in retrieved data
         if "Error" in last_price_str or "Error" in previous_close_str:
             return f"Error retrieving point change for {symbol}: Invalid price data"
-
-        # Convert to float for calculations
         last_price = float(last_price_str)
         previous_close = float(previous_close_str)
-
-        # Calculate point change
         point_change = last_price - previous_close
-
-        # Format the output
         point_change_str = (
             f"+{point_change:.2f} pts"
             if point_change >= 0
             else f"{point_change:.2f} pts"
         )
-
         return point_change_str
-
     except Exception as e:
         return f"Error calculating point change for {symbol}: {str(e)}"
 
@@ -452,33 +441,22 @@ def get_stock_percentage_change(symbol: str) -> str:
         str: A formatted string with the percentage change (e.g., "+2.34%" or "-1.45%"), or an error message.
     """
     try:
-        # Get last price and previous close
         last_price_str = get_stock_last_price(symbol)
         previous_close_str = get_stock_previous_close(symbol)
-
-        # Check for errors in retrieved data
         if "Error" in last_price_str or "Error" in previous_close_str:
             return (
                 f"Error retrieving percentage change for {symbol}: Invalid price data"
             )
-
-        # Convert to float for calculations
         last_price = float(last_price_str)
         previous_close = float(previous_close_str)
-
-        # Calculate percentage change
         point_change = last_price - previous_close
         percentage_change = (point_change / previous_close) * 100
-
-        # Format the output
         percentage_change_str = (
             f"+{percentage_change:.2f}%"
             if percentage_change >= 0
             else f"{percentage_change:.2f}%"
         )
-
         return percentage_change_str
-
     except Exception as e:
         return f"Error calculating percentage change for {symbol}: {str(e)}"
 
@@ -535,4 +513,4 @@ if __name__ == "__main__":
     # print(
     #     f"200 Day Average for {symbol_to_test}: {get_stock_two_hundred_day_average(symbol_to_test)}"
     # )
-    print(get_stock_info(symbol_to_test))
+    print(get_stock_fastinfo(symbol_to_test))

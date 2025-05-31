@@ -70,7 +70,7 @@ export default function AddStockOverlay({
     try {
       const response = await fetch('/api/dashboard/stocks/add', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' }, // Added headers
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ symbol: stock.symbol })
       })
 

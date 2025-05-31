@@ -1,11 +1,10 @@
 import { cookies } from 'next/headers'
-import { NextResponse } from 'next/server'
 
 export const maxDuration = 30
 
 export async function POST(req: Request) {
   try {
-    const { message, sessionId, isDeepSearch } = await req.json()
+    const { message, isDeepSearch } = await req.json()
     const cookieStore = await cookies()
     const token = cookieStore.get('jwt_token')?.value
 
@@ -13,12 +12,8 @@ export async function POST(req: Request) {
       return new Response('Unauthorized', { status: 401 })
     }
 
-    if (!sessionId) {
-      return new Response('Session ID required', { status: 400 })
-    }
-
     const response = await fetch(
-      `${process.env.NEXT_PUBLIC_BACKEND_API_URL}/chat/stream`,
+      `${process.env.NEXT_PUBLIC_BACKEND_API_URL}/chat/new`,
       {
         method: 'POST',
         headers: {
@@ -26,13 +21,11 @@ export async function POST(req: Request) {
           Authorization: `Bearer ${token}`
         },
         body: JSON.stringify({
-          session_id: sessionId,
           message: message,
-          isDeepSearch: isDeepSearch,
+          isDeepSearch: typeof isDeepSearch !== 'undefined' ? isDeepSearch : false,
         })
       }
     )
-
     if (!response.ok) {
       const errorText = await response.text()
       console.error('Backend error:', response.status, errorText)

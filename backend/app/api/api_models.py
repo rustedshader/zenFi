@@ -31,6 +31,10 @@ class User(Base):
     bank_accounts = relationship(
         "BankAccount", back_populates="user", cascade="all, delete-orphan"
     )
+    # Added relationship to Portfolio
+    portfolios = relationship(
+        "Portfolio", back_populates="user", cascade="all, delete-orphan"
+    )
 
 
 class Stock(Base):
@@ -108,6 +112,44 @@ class Transaction(Base):
     bank_account = relationship("BankAccount", back_populates="transactions")
 
 
+class Portfolio(Base):
+    __tablename__ = "portfolios"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    name = Column(String, nullable=False, index=True)
+    description = Column(String, nullable=True)
+    gcs_document_link = Column(String, nullable=True)
+    created_at = Column(
+        DateTime(timezone=True), default=datetime.datetime.now(datetime.timezone.utc)
+    )
+    user = relationship("User", back_populates="portfolios")
+    assets = relationship(
+        "Asset", back_populates="portfolio", cascade="all, delete-orphan"
+    )
+
+
+class Asset(Base):
+    __tablename__ = "assets"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
+    portfolio_id = Column(
+        UUID(as_uuid=True), ForeignKey("portfolios.id"), nullable=False
+    )
+    asset_type = Column(String, nullable=False)
+    identifier = Column(String, nullable=False)
+    quantity = Column(Float, nullable=False)
+    purchase_price = Column(Float, nullable=False)
+    purchase_date = Column(Date, nullable=False)
+    current_value = Column(Float, nullable=True)
+    notes = Column(String, nullable=True)
+    created_at = Column(
+        DateTime(timezone=True), default=datetime.datetime.now(datetime.timezone.utc)
+    )
+    portfolio = relationship("Portfolio", back_populates="assets")
+
+
+# --- Pydantic Models ---
+
+
 class UserCreate(BaseModel):
     username: str
     email: str
@@ -119,10 +161,15 @@ class UserLogin(BaseModel):
     password: str
 
 
+class NewChatInput(BaseModel):
+    message: str
+    isDeepSearch: bool
+
+
 class ChatInput(BaseModel):
     session_id: str
     message: str
-    tool_type: str
+    isDeepSearch: bool
 
 
 class ChatResponse(BaseModel):
@@ -183,11 +230,66 @@ class AddTransactionInput(BaseModel):
 
 
 class UpdateTransactionInput(BaseModel):
-    type: Optional[str]
-    mode: Optional[str]
-    amount: Optional[float]
-    current_balance: Optional[float]
-    narration: Optional[str]
-    reference: Optional[str]
-    transaction_timestamp: Optional[datetime.datetime]
-    value_date: Optional[datetime.date]
+    type: Optional[str] = None
+    mode: Optional[str] = None
+    amount: Optional[float] = None
+    current_balance: Optional[float] = None
+    narration: Optional[str] = None
+    reference: Optional[str] = None
+    transaction_timestamp: Optional[datetime.datetime] = None
+    value_date: Optional[datetime.date] = None
+
+
+# --- New Pydantic Models for Portfolio ---
+
+
+class AssetBase(BaseModel):
+    asset_type: str
+    identifier: str
+    quantity: float
+    purchase_price: float
+    purchase_date: datetime.date
+    current_price: Optional[float] = None
+    notes: Optional[str] = None
+
+
+class AssetCreate(AssetBase):
+    pass
+
+
+class AssetOutput(AssetBase):
+    id: uuid.UUID
+    portfolio_id: uuid.UUID
+    created_at: datetime.datetime
+    market_value: Optional[float] = None
+    total_cost: Optional[float] = None
+    profit_loss: Optional[float] = None
+    percentage_change: Optional[float] = None
+    stock_info: Optional[dict] = None
+    news: Optional[list] = None
+
+    class Config:
+        from_attributes = True
+
+
+class PortfolioBase(BaseModel):
+    name: str
+    description: Optional[str] = None
+    gcs_document_link: Optional[str] = None
+
+
+class PortfolioCreateInput(BaseModel):
+    name: str
+    description: Optional[str] = None
+
+
+class PortfolioCreate(PortfolioBase):
+    pass
+
+
+class PortfolioOutput(PortfolioCreateInput):
+    id: uuid.UUID
+    created_at: datetime.datetime
+
+    class Config:
+        from_attributes = True

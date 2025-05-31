@@ -19,13 +19,15 @@ interface ChatProps {
   savedMessages?: Message[]
   sessionId?: string
   initialQuery?: string
+  isDeepResearch?: boolean
 }
 
 export function Chat({
   id,
   savedMessages = [],
   sessionId: initialSessionId,
-  initialQuery
+  initialQuery,
+  isDeepResearch
 }: ChatProps) {
   const [messages, setMessages] = useState<Message[]>(savedMessages)
   const [input, setInput] = useState('')
@@ -35,7 +37,9 @@ export function Chat({
   )
   const { isLoggedIn, logout } = useAuth()
   const initializedRef = useRef(false)
-  const [toolType, setToolType] = useState<string>('standard')
+  const [isDeepSearch, setDeepSearch] = useState<boolean>(
+    isDeepResearch ?? false
+  )
 
   // Combined effect for session creation and initial query
   useEffect(() => {
@@ -114,7 +118,11 @@ export function Chat({
         const response = await fetch('/api/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message: userMessage.content, sessionId: sessionId, tool_type: toolType })
+          body: JSON.stringify({
+            message: userMessage.content,
+            sessionId: sessionId,
+            isDeepSearch: isDeepSearch
+          })
         })
 
         if (!response.ok) {
@@ -183,7 +191,7 @@ export function Chat({
         setIsLoading(false)
       }
     },
-    [sessionId, logout, toolType]
+    [sessionId, logout, isDeepSearch]
   )
 
   const stop = () => setIsLoading(false)
@@ -195,7 +203,7 @@ export function Chat({
           messages={messages}
           isLoading={isLoading}
           chatId={id}
-          onQuerySelect={() => { }}
+          onQuerySelect={() => {}}
         />
       </div>
       <ChatPanel
@@ -218,8 +226,8 @@ export function Chat({
         setMessages={setMessages}
         stop={stop}
         append={append}
-        currentToolType={toolType}
-        onToolTypeChange={setToolType}
+        currentisDeepSearch={isDeepSearch}
+        onDeepSearchChange={setDeepSearch}
       />
     </div>
   )

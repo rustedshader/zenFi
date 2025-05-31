@@ -4,7 +4,7 @@ import json
 import random
 from typing import List
 import uuid
-from fastapi import APIRouter, Depends, FastAPI, HTTPException
+from fastapi import APIRouter, Depends, FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select
@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.main import (
     ChatServiceManager,
     create_access_token,
+    generate_ai_portfolio_summary,
     get_chat_history,
     get_current_user,
     get_db,
@@ -20,12 +21,17 @@ from app.api.main import (
     verify_password,
 )
 from app.api.api_models import (
+    Asset,
+    AssetCreate,
     BankAccount,
     BankAccountOutput,
     ChatInput,
     ChatMessage,
     ChatSession,
     LinkBankAccountInput,
+    Portfolio,
+    PortfolioCreateInput,
+    PortfolioOutput,
     Stock,
     StockInput,
     StockSearchInput,
@@ -50,13 +56,19 @@ from app.chat_provider.account_aggreator.account_data import (
     generate_fake_account_data,
 )
 from app.chat_provider.tools.news_tools import (
-    yahoo_finance_news_tool,
-    duckduckgo_news_search_tool,
+    fetch_finance_news,
 )
 import requests
+from google.cloud import storage
+from sqlalchemy.orm import selectinload
+from forex_python.converter import CurrencyRates
+
+from app.chat_provider.extra_functions.exchange import get_exchange_rate
+from app.chat_provider.extra_functions.charts import get_charts_data
+
 
 chat_service_manager = ChatServiceManager()
-
+c = CurrencyRates()
 app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
@@ -160,6 +172,264 @@ async def list_sessions(
 #     await db.commit()
 #     return fetched_news
 
+# ---------------------------------
+
+# Portfolio Related Stuff
+
+portfolio_router = APIRouter(prefix="/portfolio")
+
+
+@portfolio_router.post("/create")
+async def create_portfolio(
+    portfolio_data: PortfolioCreateInput,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Create a new portfolio for the authenticated user."""
+    new_portfolio = Portfolio(
+        user_id=current_user.id,
+        name=portfolio_data.name,
+        description=portfolio_data.description,
+        gcs_document_link=None,
+    )
+    db.add(new_portfolio)
+    await db.commit()
+    await db.refresh(new_portfolio)
+    return {
+        "message": "Portfolio created successfully",
+        "portfolio_id": new_portfolio.id,
+    }
+
+
+@portfolio_router.post("/{portfolio_id}/upload_pdf")
+async def upload_pdf(
+    portfolio_id: int,
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Upload a PDF to an existing portfolio and store it in GCP bucket."""
+    stmt = select(Portfolio).where(
+        Portfolio.id == portfolio_id, Portfolio.user_id == current_user.id
+    )
+    result = await db.execute(stmt)
+    portfolio = result.scalars().first()
+    if not portfolio:
+        raise HTTPException(
+            status_code=404, detail="Portfolio not found or not authorized"
+        )
+
+    try:
+        client = storage.Client()
+        bucket = client.bucket("portfolios_bucket")
+        if file.filename and "." in file.filename:
+            file_extension = file.filename.split(".")[-1]
+        else:
+            file_extension = "pdf"
+        blob_name = f"user_{current_user.id}/portfolio_{portfolio_id}/{uuid.uuid4()}.{file_extension}"
+        blob = bucket.blob(blob_name)
+        blob.upload_from_file(file.file, content_type=file.content_type)
+        gcs_url = f"https://storage.googleapis.com/portfolios_bucket/{blob_name}"
+
+        setattr(portfolio, "gcs_document_link", gcs_url)
+        await db.commit()
+        return {"message": "PDF uploaded successfully", "gcs_document_link": gcs_url}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to upload PDF: {str(e)}")
+
+
+@portfolio_router.post("/{portfolio_id}/assets")
+async def create_portfolio_assets(
+    portfolio_id: str,
+    asset_data: AssetCreate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        stmt = select(Portfolio).where(
+            Portfolio.id == portfolio_id, Portfolio.user_id == current_user.id
+        )
+        result = await db.execute(stmt)
+        portfolio = result.scalars().first()
+        if not portfolio:
+            raise HTTPException(
+                status_code=404, detail="Portfolio not found or not authorized"
+            )
+        asset = Asset(portfolio_id=portfolio_id, **asset_data.dict())
+        db.add(asset)
+        await db.commit()
+        await db.refresh(asset)
+        return asset
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to create asset: {str(e)}")
+
+
+@portfolio_router.get("/{portfolio_id}")
+async def get_portfolio(
+    portfolio_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    stmt = (
+        select(Portfolio)
+        .where(Portfolio.id == portfolio_id, Portfolio.user_id == current_user.id)
+        .options(selectinload(Portfolio.assets))
+    )
+    result = await db.execute(stmt)
+    portfolio = result.scalars().first()
+    if not portfolio:
+        raise HTTPException(
+            status_code=404, detail="Portfolio not found or not authorized"
+        )
+
+    total_value_base = 0.0
+    total_day_gain_base = 0.0
+    total_gain_base = 0.0
+    assets_details = []
+
+    for asset in portfolio.assets:
+        asset: Asset = asset
+        asset_detail = {
+            "identifier": asset.identifier,
+            "asset_type": asset.asset_type,
+            "quantity": asset.quantity,
+            "purchase_price": asset.purchase_price,
+            "purchase_date": asset.purchase_date,
+            "value_base": 0.0,
+            "day_gain_base": 0.0,
+            "total_gain_base": 0.0,
+            "day_gain_percent": 0.0,
+            "total_gain_percent": 0.0,
+            "news": [],
+        }
+
+        if getattr(asset, "asset_type", None) == "Stock":
+            asset_identifier: str = getattr(asset, "identifier", "")
+            asset_quantity: float = getattr(asset, "quantity", 0)
+            asset_purchase_price: float = getattr(asset, "purchase_price", 0)
+            stock_fastinfo = get_stock_fastinfo(asset_identifier)
+
+            news_data = fetch_finance_news(asset_identifier)
+            if (
+                isinstance(news_data, dict)
+                and news_data.get("status") == "OK"
+                and news_data.get("data", {}).get("tickerStream", {}).get("stream")
+            ):
+                news_items = (
+                    news_data.get("data", {}).get("tickerStream", {}).get("stream", [])
+                )
+                for item in news_items:
+                    content = item.get("content", {})
+                    if content.get("contentType") == "STORY" and content.get(
+                        "finance", {}
+                    ).get("stockTickers"):
+                        tickers = [
+                            ticker["symbol"]
+                            for ticker in content["finance"]["stockTickers"]
+                        ]
+                        if asset_identifier in tickers:
+                            news_entry = {
+                                "title": content.get("title", ""),
+                                "summary": content.get("summary", ""),
+                                "pubDate": content.get("pubDate", ""),
+                                "url": (content.get("clickThroughUrl") or {}).get(
+                                    "url", ""
+                                ),
+                            }
+                            asset_detail["news"].append(news_entry)
+
+            if not isinstance(stock_fastinfo, str):
+                stock_last_price = stock_fastinfo.last_price
+                stock_previous_close = stock_fastinfo.previous_close
+                stock_currency = stock_fastinfo.currency
+
+                if isinstance(stock_last_price, float):
+                    value_asset_currency = stock_last_price * asset_quantity
+                    if isinstance(stock_previous_close, float):
+                        day_gain_asset_currency = (
+                            stock_last_price - stock_previous_close
+                        ) * asset_quantity
+                        total_gain_asset_currency = (
+                            stock_last_price - asset_purchase_price
+                        ) * asset_quantity
+                        exchange_rate = get_exchange_rate(stock_currency, "INR")
+
+                        value_base = value_asset_currency * exchange_rate
+                        day_gain_base = day_gain_asset_currency * exchange_rate
+                        total_gain_base = total_gain_asset_currency * exchange_rate
+                        day_gain_percent = (
+                            (
+                                (stock_last_price - stock_previous_close)
+                                / stock_previous_close
+                                * 100
+                            )
+                            if stock_previous_close != 0
+                            else 0
+                        )
+                        total_gain_percent = (
+                            (
+                                (stock_last_price - asset_purchase_price)
+                                / asset_purchase_price
+                                * 100
+                            )
+                            if asset_purchase_price != 0
+                            else 0
+                        )
+
+                        asset_detail.update(
+                            {
+                                "value_base": value_base,
+                                "day_gain_base": day_gain_base,
+                                "total_gain_base": total_gain_base,
+                                "day_gain_percent": day_gain_percent,
+                                "total_gain_percent": total_gain_percent,
+                            }
+                        )
+
+                        total_value_base += value_base
+                        total_day_gain_base += day_gain_base
+                        total_gain_base += total_gain_base
+
+        assets_details.append(asset_detail)
+        ai_portfolio_summary = await generate_ai_portfolio_summary(
+            portfolio_name=str(getattr(portfolio, "name", "")),
+            portfolio_value=total_value_base,
+            total_day_gain_inr=total_day_gain_base,
+            total_gain_inr=total_day_gain_base,
+            assets=assets_details,
+        )
+
+    portfolio_response = {
+        "id": portfolio.id,
+        "name": portfolio.name,
+        "total_value_inr": total_value_base,
+        "total_day_gain_inr": total_day_gain_base,
+        "total_gain_inr": total_gain_base,
+        "assets": assets_details,
+        "ai_summary": ai_portfolio_summary,
+    }
+
+    return portfolio_response
+
+
+@portfolio_router.get("/", response_model=List[PortfolioOutput])
+async def list_portfolios(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    stmt = (
+        select(Portfolio)
+        .where(Portfolio.user_id == current_user.id)
+        .options(selectinload(Portfolio.assets))
+    )
+    result = await db.execute(stmt)
+    portfolios = result.scalars().all()
+    return portfolios
+
 
 # ---------------------------------
 
@@ -205,30 +475,13 @@ async def get_stock_information(
             except Exception:
                 pass
 
-        try:
-            yahoo_finance_news = yahoo_finance_news_tool.invoke(symbol)
-            if isinstance(yahoo_finance_news, str):
-                try:
-                    yahoo_finance_news = json.loads(yahoo_finance_news)
-                except Exception:
-                    pass
-        except Exception:
-            yahoo_finance_news = []
-
-        try:
-            duckduckgo_finance_news = duckduckgo_news_search_tool.invoke(symbol)
-            if isinstance(duckduckgo_finance_news, str):
-                try:
-                    duckduckgo_finance_news = json.loads(duckduckgo_finance_news)
-                except Exception:
-                    pass
-        except Exception:
-            duckduckgo_finance_news = []
+        finance_news = fetch_finance_news(symbol)
+        charts_data = get_charts_data(symbol)
 
         return {
             "stock_information": stock_information,
-            "yahoo_finance_news": yahoo_finance_news,
-            "duckduckgo_finance_news": duckduckgo_finance_news,
+            "news": finance_news,
+            "charts_data": charts_data,
         }
     except Exception as e:
         raise HTTPException(
@@ -242,6 +495,30 @@ async def get_stock_information(
 
 
 dashboard_router = APIRouter(prefix="/dashboard")
+
+
+@dashboard_router.get("/market_status")
+async def get_market_status(
+    current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
+):
+    try:
+        IST = datetime.timezone(datetime.timedelta(hours=5, minutes=30))
+        now_ist = datetime.datetime.now(tz=IST)
+        market_open = now_ist.replace(hour=9, minute=15, second=0, microsecond=0)
+        market_close = now_ist.replace(hour=15, minute=30, second=0, microsecond=0)
+        is_weekday = now_ist.weekday() < 5
+
+        if is_weekday and market_open <= now_ist <= market_close:
+            market_status = "active"
+        else:
+            market_status = "closed"
+        return {
+            "market_status": market_status,
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Failed to fetch dashboard info: {str(e)}"
+        )
 
 
 @dashboard_router.post("/stocks/add")
@@ -541,19 +818,20 @@ async def delete_transaction(
 
 # --------------------------------#
 
-
 # Chat
-@app.post("/chat/stream")
+
+chat_router = APIRouter(prefix="/chat")
+
+
+@chat_router.post("/stream")
 async def stream_chat(
     input_data: ChatInput,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     try:
-        # Creating a UUID Object from the uuid string and validating it too
-        session_uuid = uuid_UUID(input_data.session_id)
-        tool_type = input_data.tool_type
-        print(f"Tool type: {tool_type}")
+        session_uuid = uuid.UUID(input_data.session_id)
+        isDeepResearch = input_data.isDeepSearch
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid session id format")
     stmt = select(ChatSession).where(
@@ -575,15 +853,15 @@ async def stream_chat(
     await db.commit()
 
     async def stream_generator():
+        yield f'data: {{"type":"session","session_id":{json.dumps(str(session.id))}}}\n\n'
         full_response = ""
         sources = []
         try:
             yield 'data: {"type":"heartbeat"}\n\n'
             async for token in chat_service_manager.stream_message(
-                input_data.session_id, input_data.message, tool_type
+                input_data.session_id, input_data.message, isDeepSearch=isDeepResearch
             ):
                 if token:
-                    # Use precompiled regex to split tokens if needed
                     parts = token_splitter.split(token)
                     for part in parts:
                         if part:
@@ -620,12 +898,7 @@ async def stream_chat(
     )
 
 
-@app.get("/health")
-async def health_check():
-    return {"status": "healthy"}
-
-
-@app.get("/chat/history")
+@chat_router.get("/history")
 async def get_chat_history_endpoint(
     session_id: str,
     current_user: User = Depends(get_current_user),
@@ -658,5 +931,15 @@ async def get_chat_history_endpoint(
     return formatted_history
 
 
+# --------------------------------#
+
+
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy"}
+
+
 app.include_router(dashboard_router)
 app.include_router(stock_router)
+app.include_router(portfolio_router)
+app.include_router(chat_router)

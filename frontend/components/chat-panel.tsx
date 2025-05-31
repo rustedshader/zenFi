@@ -1,9 +1,9 @@
 'use client'
 
-import { ArrowUp, Microscope, Square, ZoomIn } from 'lucide-react'
+import { ArrowRight, Microscope, Square } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
-import Textarea from 'react-textarea-autosize'
+import { Textarea } from './ui/textarea'
 import { Button } from './ui/button'
 import { motion } from 'framer-motion'
 
@@ -27,8 +27,8 @@ interface ChatPanelProps {
   setMessages: (messages: Message[]) => void
   stop: () => void
   append: (message: Message) => void
-  currentToolType: string;
-  onToolTypeChange: (newToolType: string) => void;
+  currentisDeepSearch: boolean
+  onDeepSearchChange: (newToolType: boolean) => void
 }
 
 export function ChatPanel({
@@ -40,17 +40,17 @@ export function ChatPanel({
   setMessages,
   stop,
   append,
-  currentToolType,
-  onToolTypeChange
+  currentisDeepSearch,
+  onDeepSearchChange
 }: ChatPanelProps) {
   const inputRef = useRef<HTMLTextAreaElement>(null)
-  const isFirstRender = useRef(true)
   const [isComposing, setIsComposing] = useState(false)
+
   const deepResearchToggle = () => {
-    const newToolType = currentToolType === 'deepresearch' ? 'standard' : 'deepresearch';
-    onToolTypeChange(newToolType);
-    console.log(newToolType);
-  };
+    const newIsDeepSearch = !currentisDeepSearch
+    onDeepSearchChange(newIsDeepSearch)
+    console.log('isDeepSearch:', newIsDeepSearch)
+  }
 
   return (
     <div className="fixed bottom-0 left-0 w-full">
@@ -61,19 +61,18 @@ export function ChatPanel({
           onSubmit={handleSubmit}
           className="relative"
         >
-          <div className="relative rounded-2xl bg-white border border-gray-200 shadow-sm overflow-hidden">
+          <div className="relative rounded-2xl border border-gray-200 shadow-lg overflow-hidden transition-colors">
             <Textarea
               ref={inputRef}
               name="input"
-              rows={2}
-              maxRows={6}
+              rows={1}
               placeholder="How can I help?"
               value={input}
               onChange={handleInputChange}
               onCompositionStart={() => setIsComposing(true)}
               onCompositionEnd={() => setIsComposing(false)}
               disabled={isLoading}
-              className="w-full resize-none bg-transparent text-gray-900 placeholder:text-gray-500 focus:outline-none py-3 sm:py-5 px-3 sm:px-5 pr-12 text-sm sm:text-base disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full resize-none focus:outline-none py-4 px-6 pr-20 text-base disabled:opacity-50 disabled:cursor-not-allowed"
               onKeyDown={e => {
                 if (e.key === 'Enter' && !e.shiftKey && !isComposing) {
                   e.preventDefault()
@@ -84,29 +83,42 @@ export function ChatPanel({
                 }
               }}
             />
-            <div className="absolute right-1 sm:right-2 bottom-1 sm:bottom-2">
+            <div className="absolute right-3 bottom-3 flex items-center space-x-2">
               <Button
                 type="button"
                 disabled={isLoading}
                 onClick={deepResearchToggle}
-                variant={currentToolType === "deepresearch" ? "secondary" : "ghost"}
+                variant={currentisDeepSearch ? 'secondary' : 'ghost'}
+                size="sm"
                 title="Toggle Deep Research"
+                aria-label={
+                  currentisDeepSearch
+                    ? 'Disable Deep Research'
+                    : 'Enable Deep Research'
+                }
+                className="border rounded-xl px-2 flex items-center space-x-1"
               >
-                <Microscope className={currentToolType === "deepresearch" ? "text-blue-600" : ""} />
+                <Microscope
+                  className={
+                    currentisDeepSearch ? 'text-blue-600' : 'text-gray-500'
+                  }
+                />
+                <span className="text-sm">DeepResearch</span>
               </Button>
               <Button
                 type="submit"
                 disabled={isLoading || input.trim().length === 0}
-                className="bg-transparent hover:bg-gray-100 text-gray-600 hover:text-gray-900 rounded-lg p-1.5 sm:p-2"
+                className="rounded-xl p-2.5 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-lg"
               >
                 {isLoading ? (
-                  <Square className="size-4 sm:size-5" />
+                  <Square className="size-5" />
                 ) : (
-                  <ArrowUp className="size-4 sm:size-5" />
+                  <ArrowRight className="size-5" />
                 )}
               </Button>
             </div>
           </div>
+          <p className="text-xs mt-2 text-center">ZenFi can make mistakes</p>
         </motion.form>
       </div>
     </div>
