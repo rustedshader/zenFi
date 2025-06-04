@@ -665,7 +665,7 @@ class DeepSearchChatService:
         return self.graph
 
     async def stream_input(
-        self, user_input: str, thread_id: str, user_id: str
+        self, user_input: str, thread_id: str, user_id: str, session_id: str
     ) -> AsyncGenerator[str, None]:
         """Stream the model's response to user input asynchronously."""
         config = RunnableConfig(
