@@ -1,44 +1,71 @@
-# app/api/auth.py - Clean auth router without OAuth2PasswordBearer definition
-import datetime
-from typing import Annotated
-from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordRequestForm
-from sqlalchemy import select
+import os
+from dotenv import load_dotenv
+from fastapi import Depends, HTTPException, APIRouter
+from fastapi.security import OAuth2PasswordBearer
+from jose import JWTError, jwt, ExpiredSignatureError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
+from app.api.api_models import User, UserCreate, UserLogin
+from app.api.api_functions import get_db, hash_password, verify_password
+import datetime
 
-from app.api.api_models import (
-    User,
-    UserCreate,
-)
-from app.chat_provider.auth import (
-    authenticate_user,
-    create_refresh_token,
-    store_refresh_token,
-)
-from app.chat_provider.auth import create_access_token
-from app.api.api_functions import get_current_user, get_db, hash_password
+load_dotenv()
 
-# Clean router definition
-auth_router = APIRouter(
-    prefix="/auth",
-    tags=["Authentication"],
-    responses={404: {"description": "Not found"}},
-)
+# Ensure a single SECRET_KEY
+SECRET_KEY = os.environ.get("JWT_SECRET_KEY", "your-secure-secret-key")
+ALGORITHM = "HS256"
+JWT_EXPIRE_TIME = int(os.environ.get("JWT_EXPIRE_TIME", 1800))  # 30 minutes
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
+auth_router = APIRouter(prefix="/auth")
 
 
-@auth_router.post("/register", status_code=status.HTTP_201_CREATED)
+def create_access_token(sub: str, name: str):
+    expire = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(
+        seconds=JWT_EXPIRE_TIME
+    )
+    jwt_payload = {"sub": sub, "name": name, "exp": expire}
+    return jwt.encode(jwt_payload, SECRET_KEY, algorithm=ALGORITHM)
+
+
+async def get_current_user(
+    token: str = Depends(oauth2_scheme), db: AsyncSession = Depends(get_db)
+):
+    credentials_exception = HTTPException(
+        status_code=401,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username = payload.get("sub")
+        if not isinstance(username, str) or not username:
+            raise credentials_exception
+    except ExpiredSignatureError:
+        raise HTTPException(
+            status_code=401,
+            detail="Token has expired",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    except JWTError as e:
+        print("JWT Error:", str(e))  # Log for debugging
+        raise credentials_exception
+    stmt = select(User).where(User.username == username)
+    result = await db.execute(stmt)
+    user = result.scalars().first()
+    if not user:
+        raise credentials_exception
+    return user
+
+
+@auth_router.post("/register")
 async def register(user: UserCreate, db: AsyncSession = Depends(get_db)):
-    """Register a new user"""
     stmt = select(User).where(
         (User.username == user.username) | (User.email == user.email)
     )
     result = await db.execute(stmt)
     if result.scalars().first():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Username or email already exists",
-        )
-
+        raise HTTPException(status_code=400, detail="Username or email already exists")
     hashed_password = hash_password(user.password)
     new_user = User(
         username=user.username, email=user.email, hashed_password=hashed_password
@@ -46,67 +73,22 @@ async def register(user: UserCreate, db: AsyncSession = Depends(get_db)):
     db.add(new_user)
     await db.commit()
     await db.refresh(new_user)
-    return {"message": "User created successfully", "username": new_user.username}
+    return {"message": "User created successfully"}
 
 
 @auth_router.post("/login")
-async def login(
-    form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
-    db: AsyncSession = Depends(get_db),
-):
-    print(form_data)
-    user = await authenticate_user(db, form_data.username, form_data.password)
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    # if not user.is_allowed:
-    #     raise HTTPException(
-    #         status_code=status.HTTP_400_BAD_REQUEST,
-    #         detail="Inactive user!! Please connect to Data Science team for activation."
-    #     )
-    # Create access token
-    access_token_expires = datetime.timedelta(minutes=3600)
+async def login(user: UserLogin, db: AsyncSession = Depends(get_db)):
+    stmt = select(User).where(User.username == user.username)
+    result = await db.execute(stmt)
+    db_user = result.scalars().first()
+    if not db_user or not verify_password(user.password, db_user.hashed_password):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
     access_token = create_access_token(
-        data={"sub": user.email}, expires_delta=access_token_expires
+        sub=str(db_user.username), name=str(db_user.username)
     )
-
-    # Create refresh token
-    refresh_token_expires = datetime.timedelta(days=1)
-    refresh_token = create_refresh_token(
-        data={
-            "sub": user.email,
-        },
-        expires_delta=refresh_token_expires,
-    )
-
-    await store_refresh_token(db, user.id, refresh_token)
-
-    return {
-        "access_token": access_token,
-        "refresh_token": refresh_token,
-        "token_type": "bearer",
-    }
-
-
-@auth_router.get("/me")
-async def read_users_me(current_user: User = Depends(get_current_user)):
-    """Get current user information"""
-    return {
-        "username": current_user.username,
-        "email": current_user.email,
-        "id": current_user.id,
-    }
+    return {"access_token": access_token, "token_type": "bearer"}
 
 
 @auth_router.post("/validate_token")
 async def validate_token(current_user: User = Depends(get_current_user)):
-    """Validate if the current token is valid"""
-    return {
-        "valid": True,
-        "message": "Token is valid",
-        "username": current_user.username,
-    }
+    return {"message": "Token is valid", "username": current_user.username}
