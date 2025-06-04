@@ -914,7 +914,7 @@ async def scrape_pages(titles: List[str], urls: List[str]) -> str:
                 pages.append(f"Error fetching URL: {str(e)}")
 
         # Create formatted output
-        formatted_output = f"Search results: \n\n"
+        formatted_output = "Search results: \n\n"
 
         for i, (title, url, page) in enumerate(zip(titles, urls, pages)):
             formatted_output += f"\n\n--- SOURCE {i + 1}: {title} ---\n"

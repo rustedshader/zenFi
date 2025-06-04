@@ -1,6 +1,7 @@
 from typing import Annotated, List, TypedDict, Literal, Optional
 from pydantic import BaseModel, Field
 import operator
+from langgraph.graph.message import add_messages
 
 
 class Section(BaseModel):
@@ -80,3 +81,17 @@ class SectionOutputState(TypedDict):
     completed_sections: list[
         Section
     ]  # Final key we duplicate in outer state for Send() API
+
+
+class SearchState(TypedDict):
+    topic: str
+    final_response: str
+    source_str: str
+
+
+class AppState(TypedDict):
+    messages: Annotated[list, add_messages]
+    needs_portfolio: Optional[bool]
+    search_queries: list[str]
+    search_sufficient: Optional[bool]
+    summary: Optional[str]

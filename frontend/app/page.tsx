@@ -7,6 +7,7 @@ import { Sparkles } from 'lucide-react'
 import MarketOverview from '@/components/homepage/market-overview'
 import PinnedStocks from '@/components/homepage/pinned-stocks'
 import HomeSearch from '@/components/homepage/home-search'
+import Image from 'next/image'
 
 export default function Page() {
   const [error, setError] = useState<string | null>(null)
@@ -62,12 +63,17 @@ export default function Page() {
             <Card className="shadow-md border flex-1">
               <CardContent className="p-8 flex flex-col items-center">
                 <div className="text-center mb-6">
-                  <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl mb-6 shadow-lg">
-                    <Sparkles className="h-10 w-10 drop-shadow" />
+                  <div className="flex items-center justify-center mb-3 space-x-3">
+                    <Image
+                      src="/zenfi_logo.png"
+                      alt="zenfi_logo"
+                      height={40}
+                      width={40}
+                      priority
+                      className="block"
+                    />
+                    <h1 className="text-4xl font-bold">ZenFi AI</h1>
                   </div>
-                  <h1 className="text-4xl font-bold mb-3">
-                    Welcome to ZenFi AI
-                  </h1>
                   <p className="text-xl opacity-50 mb-6 max-w-2xl mx-auto">
                     Your intelligent finance assistant for smarter investment
                     decisions

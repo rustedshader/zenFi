@@ -1,18 +1,21 @@
 import datetime
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 import uuid
 from pydantic import BaseModel, Field
 from sqlalchemy import (
     JSON,
+    Boolean,
     Column,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     String,
     UUID,
     Float,
     Date,
 )
+import sqlalchemy
 from sqlalchemy.orm import declarative_base, relationship
 
 Base = declarative_base()
@@ -31,9 +34,11 @@ class User(Base):
     bank_accounts = relationship(
         "BankAccount", back_populates="user", cascade="all, delete-orphan"
     )
-    # Added relationship to Portfolio
     portfolios = relationship(
         "Portfolio", back_populates="user", cascade="all, delete-orphan"
+    )
+    knowledge_bases = relationship(
+        "KnowledgeBase", back_populates="user", cascade="all, delete-orphan"
     )
 
 
@@ -55,6 +60,7 @@ class ChatSession(Base):
     created_at = Column(
         DateTime(timezone=True), default=datetime.datetime.now(datetime.timezone.utc)
     )
+    summary = Column(String, nullable=True)
 
 
 class ChatMessage(Base):
@@ -119,6 +125,7 @@ class Portfolio(Base):
     name = Column(String, nullable=False, index=True)
     description = Column(String, nullable=True)
     gcs_document_link = Column(String, nullable=True)
+    is_default = Column(Boolean, default=False, nullable=False)
     created_at = Column(
         DateTime(timezone=True), default=datetime.datetime.now(datetime.timezone.utc)
     )
@@ -145,6 +152,52 @@ class Asset(Base):
         DateTime(timezone=True), default=datetime.datetime.now(datetime.timezone.utc)
     )
     portfolio = relationship("Portfolio", back_populates="assets")
+
+
+class KnowledgeBase(Base):
+    __tablename__ = "knowledge_bases"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    name = Column(String, nullable=False, index=True)
+    description = Column(String, nullable=True)
+    meta_data = Column(JSON, nullable=True)  # Renamed from 'metadata'
+    table_id = Column(String, nullable=False, unique=True)
+    is_default = Column(Boolean, default=False, nullable=False)
+    created_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(datetime.timezone.utc),
+    )
+
+    user = relationship("User", back_populates="knowledge_bases")
+
+    __table_args__ = (
+        sqlalchemy.UniqueConstraint(
+            "user_id", "name", name="uq_user_knowledge_base_name"
+        ),
+        Index(
+            "uq_one_default_knowledge_base_per_user",
+            "user_id",
+            unique=True,
+            postgresql_where=(is_default),
+        ),
+    )
+
+
+class RefreshToken(Base):
+    __tablename__ = "refresh_tokens"
+    id = Column(Integer, primary_key=True, index=True)
+    token = Column(String, unique=True, index=True, nullable=False)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    is_valid = Column(Boolean, default=True, nullable=False)
+    usage_count = Column(Integer, default=0, nullable=False)
+    created_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(datetime.timezone.utc),
+    )
+    last_used_at = Column(DateTime(timezone=True), nullable=True)
+    user = relationship("User", backref="refresh_tokens")
 
 
 # --- Pydantic Models ---
@@ -276,20 +329,68 @@ class PortfolioBase(BaseModel):
     name: str
     description: Optional[str] = None
     gcs_document_link: Optional[str] = None
+    is_default: bool = False
 
 
 class PortfolioCreateInput(BaseModel):
     name: str
     description: Optional[str] = None
+    is_default: Optional[bool] = False
 
 
 class PortfolioCreate(PortfolioBase):
     pass
 
 
-class PortfolioOutput(PortfolioCreateInput):
+class PortfolioOutput(PortfolioBase):
     id: uuid.UUID
     created_at: datetime.datetime
 
     class Config:
         from_attributes = True
+
+
+class KnowledgeBaseCreateInput(BaseModel):
+    name: str = Field(..., min_length=1, max_length=255)
+    description: Optional[str] = None
+    meta_data: Optional[Dict[str, Any]] = None
+    is_default: bool = False
+
+
+class KnowledgeBaseOutput(BaseModel):
+    id: uuid.UUID
+    name: str
+    description: Optional[str]
+    meta_data: Optional[Dict[str, Any]]
+    table_id: str
+    is_default: bool
+    created_at: datetime.datetime
+
+    class Config:
+        from_attributes = True
+
+
+class FileUploadResponse(BaseModel):
+    message: str
+    file_name: str
+    status: str
+
+
+class DocumentChunk(BaseModel):
+    doc_id: str
+    content: str
+    embedding: List[float]
+    meta_data: Dict[str, Any]
+
+
+class QueryRequest(BaseModel):
+    query: str
+    max_results: Optional[int] = 5
+    filter: Optional[Dict[str, Any]] = None
+
+
+class QueryResponse(BaseModel):
+    answer: str
+    sources: List[Dict[str, Any]]  # List of dictionaries
+    query: str
+    knowledge_base_id: str

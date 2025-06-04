@@ -256,7 +256,7 @@ For Conclusion/Summary:
 
 ## Supervisor
 SUPERVISOR_INSTRUCTIONS = """
-You are scoping research for a report based on a user-provided topic.
+You are scoping  finance research for a report based on a user-provided topic.
 
 ### Your responsibilities:
 
@@ -307,7 +307,7 @@ You are scoping research for a report based on a user-provided topic.
 - Maintain a clear, informative, and professional tone throughout."""
 
 RESEARCH_INSTRUCTIONS = """
-You are a researcher responsible for completing a specific section of a report.
+You are a finance researcher responsible for completing a specific section of a report.
 
 ### Your goals:
 

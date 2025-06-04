@@ -1,6 +1,7 @@
 import datetime
 import pytz
 from langchain.tools import tool
+from langchain_community.tools import YouTubeSearchTool
 
 
 @tool
@@ -13,3 +14,9 @@ def get_current_datetime() -> str:
     """
     india_tz = pytz.timezone("Asia/Kolkata")
     return datetime.datetime.now(india_tz).strftime("%Y-%m-%d %H:%M:%S")
+
+
+youtube_search_tool = YouTubeSearchTool()
+
+if __name__ == "__main__":
+    print(youtube_search_tool.invoke("Mr Beast"))

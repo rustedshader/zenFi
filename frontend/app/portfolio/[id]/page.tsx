@@ -38,7 +38,8 @@ import {
   Search,
   ChevronDown,
   ChevronRight,
-  Calendar
+  Calendar,
+  Star
 } from 'lucide-react'
 import {
   Select,
@@ -48,6 +49,7 @@ import {
   SelectValue
 } from '@/components/ui/select'
 import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 
 interface Portfolio {
   id: string
@@ -57,6 +59,7 @@ interface Portfolio {
   total_gain_inr: number
   assets: Asset[]
   ai_summary?: string
+  is_default: boolean
 }
 
 interface Asset {
@@ -130,19 +133,38 @@ export default function PortfolioDetails() {
   const debounceRef = useRef<NodeJS.Timeout | null>(null)
 
   const portfolioId = params.id as string
-  console.log(portfolioId)
+
   useEffect(() => {
     const fetchPortfolio = async () => {
       setIsLoading(true)
       try {
-        const response = await fetch(`/api/portfolio/info`, {
+        // Fetch portfolio details
+        const portfolioResponse = await fetch(`/api/portfolio/info`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ portfolio_id: portfolioId })
         })
-        if (!response.ok) throw new Error('Failed to fetch portfolio')
-        const data = await response.json()
-        setPortfolio(data)
+        if (!portfolioResponse.ok) throw new Error('Failed to fetch portfolio')
+        const portfolioData = await portfolioResponse.json()
+
+        // Fetch default status
+        const defaultStatusResponse = await fetch(
+          `/api/portfolio/default_status`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ portfolio_id: portfolioId })
+          }
+        )
+        if (!defaultStatusResponse.ok)
+          throw new Error('Failed to fetch default status')
+        const defaultStatusData = await defaultStatusResponse.json()
+
+        // Combine portfolio data with default status
+        setPortfolio({
+          ...portfolioData,
+          is_default: defaultStatusData.is_default
+        })
       } catch (err) {
         setError('Failed to load portfolio. Please try again.')
         toast.error('Failed to load portfolio')
@@ -207,6 +229,32 @@ export default function PortfolioDetails() {
     setStockSearch(stock.symbol)
     setSearchResults([])
     setIsSearchDropdownOpen(false)
+  }
+
+  // Handle toggling portfolio default status
+  const handleDefaultToggle = async (setDefault: boolean) => {
+    try {
+      const response = await fetch('/api/portfolio/default', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          portfolio_id: portfolioId,
+          set_default: setDefault
+        })
+      })
+      if (!response.ok) {
+        throw new Error(
+          `Failed to ${setDefault ? 'set' : 'remove'} default portfolio`
+        )
+      }
+      setPortfolio(prev => (prev ? { ...prev, is_default: setDefault } : prev))
+      toast.success(`Portfolio ${setDefault ? 'set as' : 'removed as'} default`)
+    } catch (error) {
+      console.error(error)
+      toast.error(
+        `Failed to ${setDefault ? 'set' : 'remove'} default portfolio`
+      )
+    }
   }
 
   // Combine duplicate assets
@@ -378,7 +426,7 @@ export default function PortfolioDetails() {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <div className="bg-card  sticky">
+      <div className="bg-card sticky">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
@@ -393,10 +441,19 @@ export default function PortfolioDetails() {
                 </p>
               </div>
             </div>
-            <Button onClick={() => setIsAddAssetOpen(true)}>
-              <Plus className="h-4 w-4 mr-2" />
-              Add Asset
-            </Button>
+            <div className="flex space-x-2">
+              <Button
+                variant={portfolio.is_default ? 'outline' : 'default'}
+                onClick={() => handleDefaultToggle(!portfolio.is_default)}
+              >
+                <Star className="h-4 w-4 mr-2" />
+                {portfolio.is_default ? 'Remove Default' : 'Set as Default'}
+              </Button>
+              <Button onClick={() => setIsAddAssetOpen(true)}>
+                <Plus className="h-4 w-4 mr-2" />
+                Add Asset
+              </Button>
+            </div>
           </div>
         </div>
       </div>
@@ -417,7 +474,7 @@ export default function PortfolioDetails() {
                   {formatCurrency(portfolio.total_value_inr)}
                 </p>
               </div>
-              <div className="text-center p-6  rounded-lg border">
+              <div className="text-center p-6 rounded-lg border">
                 <p className="text-sm text-muted-foreground mb-2">
                   Today's Gain/Loss
                 </p>
@@ -436,7 +493,7 @@ export default function PortfolioDetails() {
                   )}
                 </p>
               </div>
-              <div className="text-center p-6  rounded-lg border">
+              <div className="text-center p-6 rounded-lg border">
                 <p className="text-sm text-muted-foreground mb-2">
                   Total Gain/Loss
                 </p>
@@ -459,24 +516,6 @@ export default function PortfolioDetails() {
           </CardContent>
         </Card>
 
-        {/* AI Summary */}
-        {portfolio.ai_summary && (
-          <Card className="mb-8">
-            <CardHeader>
-              <CardTitle className="flex items-center">
-                <span className="bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">
-                  AI Portfolio Insights
-                </span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="prose prose-sm max-w-none dark:prose-invert">
-                <ReactMarkdown>{portfolio.ai_summary}</ReactMarkdown>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
         <Card>
           <CardHeader>
             <CardTitle>
@@ -490,191 +529,172 @@ export default function PortfolioDetails() {
               </p>
             ) : (
               <div className="space-y-4">
-                {combinedAssets.map(
-                  (
-                    asset // Removed index, prefer unique asset.id or asset.identifier for key
-                  ) => (
-                    <Collapsible
-                      key={asset.identifier} // Use a stable, unique key
-                      className="border rounded-lg"
-                    >
-                      {/* Main Asset Info and Trigger Section */}
-                      <div className="p-4">
-                        <div className="grid grid-cols-8 gap-4 items-center">
-                          <div className="col-span-2">
-                            <div className="font-medium">
-                              {asset.identifier}
-                            </div>
-                            <div className="text-sm text-muted-foreground">
-                              {asset.asset_type}
-                            </div>
+                {combinedAssets.map(asset => (
+                  <Collapsible
+                    key={asset.identifier}
+                    className="border rounded-lg"
+                  >
+                    <div className="p-4">
+                      <div className="grid grid-cols-8 gap-4 items-center">
+                        <div className="col-span-2">
+                          <div className="font-medium">{asset.identifier}</div>
+                          <div className="text-sm text-muted-foreground">
+                            {asset.asset_type}
                           </div>
-                          <div className="text-right">
-                            <div className="font-medium">
-                              {asset.quantity?.toLocaleString() || 'N/A'}
-                            </div>
-                            <div className="text-sm text-muted-foreground">
-                              Shares
-                            </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="font-medium">
+                            {asset.quantity?.toLocaleString() || 'N/A'}
                           </div>
-                          <div className="text-right">
-                            <div className="font-medium">
-                              {formatCurrency(asset.purchase_price)}
-                            </div>
-                            <div className="text-sm text-muted-foreground">
-                              Avg Price
-                            </div>
+                          <div className="text-sm text-muted-foreground">
+                            Shares
                           </div>
-                          <div className="text-right">
-                            <div className="font-semibold">
-                              {formatCurrency(asset.value_base)}
-                            </div>
-                            <div className="text-sm text-muted-foreground">
-                              Current Value
-                            </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="font-medium">
+                            {formatCurrency(asset.purchase_price)}
                           </div>
-                          <div
-                            className={`text-right ${
-                              asset.day_gain_base >= 0
-                                ? 'text-green-600'
-                                : 'text-red-600'
-                            }`}
-                          >
-                            <div className="font-medium">
-                              {formatCurrency(asset.day_gain_base)}
-                            </div>
-                            <div className="text-sm">
-                              ({formatPercentage(asset.day_gain_percent)})
-                            </div>
+                          <div className="text-sm text-muted-foreground">
+                            Avg Price
                           </div>
-                          <div
-                            className={`text-right ${
-                              asset.total_gain_base >= 0
-                                ? 'text-green-600'
-                                : 'text-red-600'
-                            }`}
-                          >
-                            <div className="font-medium">
-                              {formatCurrency(asset.total_gain_base)}
-                            </div>
-                            <div className="text-sm">
-                              ({formatPercentage(asset.total_gain_percent)})
-                            </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="font-semibold">
+                            {formatCurrency(asset.value_base)}
                           </div>
-                          {/* Actions Column */}
-                          <div className="flex items-center justify-end gap-1 sm:gap-2">
-                            {' '}
-                            {/* Adjusted gap for responsiveness */}
-                            {asset.positions && asset.positions.length > 1 && (
-                              <CollapsibleTrigger asChild>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="whitespace-nowrap"
-                                >
-                                  <ChevronDown className="h-4 w-4 sm:mr-1" />
-                                  <span className="hidden sm:inline">
-                                    {asset.positions.length} lots
-                                  </span>
-                                  <span className="sm:hidden">
-                                    {asset.positions.length}
-                                  </span>{' '}
-                                  {/* Shorter text for mobile */}
-                                </Button>
-                              </CollapsibleTrigger>
-                            )}
-                            {asset.news && asset.news.length > 0 && (
+                          <div className="text-sm text-muted-foreground">
+                            Current Value
+                          </div>
+                        </div>
+                        <div
+                          className={`text-right ${
+                            asset.day_gain_base >= 0
+                              ? 'text-green-600'
+                              : 'text-red-600'
+                          }`}
+                        >
+                          <div className="font-medium">
+                            {formatCurrency(asset.day_gain_base)}
+                          </div>
+                          <div className="text-sm">
+                            ({formatPercentage(asset.day_gain_percent)})
+                          </div>
+                        </div>
+                        <div
+                          className={`text-right ${
+                            asset.total_gain_base >= 0
+                              ? 'text-green-600'
+                              : 'text-red-600'
+                          }`}
+                        >
+                          <div className="font-medium">
+                            {formatCurrency(asset.total_gain_base)}
+                          </div>
+                          <div className="text-sm">
+                            ({formatPercentage(asset.total_gain_percent)})
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-end gap-1 sm:gap-2">
+                          {asset.positions && asset.positions.length > 1 && (
+                            <CollapsibleTrigger asChild>
                               <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={() => setSelectedAsset(asset)}
+                                className="whitespace-nowrap"
                               >
-                                News
+                                <ChevronDown className="h-4 w-4 sm:mr-1" />
+                                <span className="hidden sm:inline">
+                                  {asset.positions.length} lots
+                                </span>
+                                <span className="sm:hidden">
+                                  {asset.positions.length}
+                                </span>
                               </Button>
-                            )}
+                            </CollapsibleTrigger>
+                          )}
+                          {asset.news && asset.news.length > 0 && (
                             <Button
-                              variant="ghost"
-                              size="sm" // Assuming you might have a smaller icon button size
-                              onClick={() => setAssetToDelete(asset)}
-                              className="text-red-600 hover:text-red-700"
-                              aria-label="Delete asset"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setSelectedAsset(asset)}
                             >
-                              <Trash2 className="h-4 w-4" />
+                              News
                             </Button>
-                          </div>
+                          )}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setAssetToDelete(asset)}
+                            className="text-red-600 hover:text-red-700"
+                            aria-label="Delete asset"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
                         </div>
                       </div>
-
-                      {/* Collapsible Content for Positions */}
-                      {asset.positions && asset.positions.length > 1 && (
-                        <CollapsibleContent className="px-4 pb-4 pt-0">
-                          {' '}
-                          {/* This content now renders below the div above */}
-                          <div className="border-t pt-4 space-y-2">
-                            {/* Optional: Add a title for the lots section */}
-                            {/* <h4 className="text-sm font-semibold mb-2 text-muted-foreground pl-1">Individual Lots:</h4> */}
-                            {asset.positions.map((position, posIndex) => (
-                              <div
-                                key={`${asset.identifier}-pos-${posIndex}`} // Use stable unique key for position
-                                className="grid grid-cols-8 gap-4 items-center text-sm py-2 bg-muted/50 rounded px-2 sm:pl-4" // Added padding for content
-                              >
-                                <div className="col-span-2 flex items-center">
-                                  <Calendar className="h-3 w-3 mr-1 flex-shrink-0" />
-                                  <span className="truncate">
-                                    {position.purchase_date
-                                      ? new Date(
-                                          position.purchase_date
-                                        ).toLocaleDateString(undefined, {
-                                          year: 'numeric',
-                                          month: 'short',
-                                          day: 'numeric'
-                                        }) // More specific date format
-                                      : 'N/A'}
-                                  </span>
-                                </div>
-                                <div className="text-right">
-                                  {position.quantity?.toLocaleString() || 'N/A'}
-                                </div>
-                                <div className="text-right">
-                                  {formatCurrency(position.purchase_price)}
-                                </div>
-                                <div className="text-right">
-                                  {formatCurrency(position.value_base)}
-                                </div>
-                                <div
-                                  className={`text-right ${
-                                    position.day_gain_base >= 0
-                                      ? 'text-green-600'
-                                      : 'text-red-600'
-                                  }`}
-                                >
-                                  {formatCurrency(position.day_gain_base)}
-                                </div>
-                                <div
-                                  className={`text-right ${
-                                    position.total_gain_base >= 0
-                                      ? 'text-green-600'
-                                      : 'text-red-600'
-                                  }`}
-                                >
-                                  {formatCurrency(position.total_gain_base)}
-                                </div>
-                                {/* Empty 8th column for alignment, as in original */}
-                                <div></div>
+                    </div>
+                    {asset.positions && asset.positions.length > 1 && (
+                      <CollapsibleContent className="px-4 pb-4 pt-0">
+                        <div className="border-t pt-4 space-y-2">
+                          {asset.positions.map((position, posIndex) => (
+                            <div
+                              key={`${asset.identifier}-pos-${posIndex}`}
+                              className="grid grid-cols-8 gap-4 items-center text-sm py-2 bg-muted/50 rounded px-2 sm:pl-4"
+                            >
+                              <div className="col-span-2 flex items-center">
+                                <Calendar className="h-3 w-3 mr-1 flex-shrink-0" />
+                                <span className="truncate">
+                                  {position.purchase_date
+                                    ? new Date(
+                                        position.purchase_date
+                                      ).toLocaleDateString(undefined, {
+                                        year: 'numeric',
+                                        month: 'short',
+                                        day: 'numeric'
+                                      })
+                                    : 'N/A'}
+                                </span>
                               </div>
-                            ))}
-                          </div>
-                        </CollapsibleContent>
-                      )}
-                    </Collapsible>
-                  )
-                )}
+                              <div className="text-right">
+                                {position.quantity?.toLocaleString() || 'N/A'}
+                              </div>
+                              <div className="text-right">
+                                {formatCurrency(position.purchase_price)}
+                              </div>
+                              <div className="text-right">
+                                {formatCurrency(position.value_base)}
+                              </div>
+                              <div
+                                className={`text-right ${
+                                  position.day_gain_base >= 0
+                                    ? 'text-green-600'
+                                    : 'text-red-600'
+                                }`}
+                              >
+                                {formatCurrency(position.day_gain_base)}
+                              </div>
+                              <div
+                                className={`text-right ${
+                                  position.total_gain_base >= 0
+                                    ? 'text-green-600'
+                                    : 'text-red-600'
+                                }`}
+                              >
+                                {formatCurrency(position.total_gain_base)}
+                              </div>
+                              <div></div>
+                            </div>
+                          ))}
+                        </div>
+                      </CollapsibleContent>
+                    )}
+                  </Collapsible>
+                ))}
               </div>
             )}
           </CardContent>
         </Card>
 
-        {/* Asset Details Modal (Code seems mostly fine, ensure 'selectedAsset' state and helpers work) */}
         {selectedAsset && (
           <Dialog
             open={!!selectedAsset}
@@ -689,9 +709,6 @@ export default function PortfolioDetails() {
                 </DialogTitle>
               </DialogHeader>
               <div className="space-y-6 py-4">
-                {' '}
-                {/* Added py-4 for spacing within content */}
-                {/* Asset Summary */}
                 <Card>
                   <CardHeader>
                     <CardTitle>Asset Overview</CardTitle>
@@ -751,7 +768,6 @@ export default function PortfolioDetails() {
                     </div>
                   </CardContent>
                 </Card>
-                {/* News Section */}
                 {selectedAsset.news && selectedAsset.news.length > 0 && (
                   <Card>
                     <CardHeader>
@@ -763,15 +779,13 @@ export default function PortfolioDetails() {
                           .slice(0, 5)
                           .map((newsItem, index) => (
                             <div
-                              key={newsItem.url || index} // Prefer unique news URL or fallback to index
-                              className="border-l-4 border-primary pl-4 py-2" // Use theme primary color
+                              key={newsItem.url || index}
+                              className="border-l-4 border-primary pl-4 py-2"
                             >
                               <h4 className="font-semibold mb-1">
-                                {' '}
-                                {/* Adjusted margin */}
                                 {newsItem.title}
                               </h4>
-                              {newsItem.summary && ( // Conditionally render summary
+                              {newsItem.summary && (
                                 <p className="text-sm text-muted-foreground mb-2">
                                   {newsItem.summary}
                                 </p>
@@ -791,13 +805,12 @@ export default function PortfolioDetails() {
                                 <Button
                                   variant="outline"
                                   size="sm"
-                                  onClick={
-                                    () =>
-                                      window.open(
-                                        newsItem.url,
-                                        '_blank',
-                                        'noopener noreferrer'
-                                      ) // Added noopener noreferrer for security
+                                  onClick={() =>
+                                    window.open(
+                                      newsItem.url,
+                                      '_blank',
+                                      'noopener noreferrer'
+                                    )
                                   }
                                 >
                                   Read More
@@ -814,7 +827,6 @@ export default function PortfolioDetails() {
           </Dialog>
         )}
 
-        {/* Add Asset Dialog */}
         <Dialog open={isAddAssetOpen} onOpenChange={setIsAddAssetOpen}>
           <DialogContent className="max-w-md">
             <DialogHeader>
@@ -851,8 +863,6 @@ export default function PortfolioDetails() {
                     className="pl-10"
                   />
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-
-                  {/* Search Results Dropdown */}
                   {isSearchDropdownOpen && searchResults.length > 0 && (
                     <Card className="absolute z-50 w-full mt-1 border rounded-md shadow-lg max-h-60 overflow-y-auto">
                       {isSearchLoading ? (
@@ -946,7 +956,6 @@ export default function PortfolioDetails() {
           </DialogContent>
         </Dialog>
 
-        {/* Delete Confirmation Dialog */}
         <Dialog
           open={!!assetToDelete}
           onOpenChange={() => setAssetToDelete(null)}
@@ -969,6 +978,31 @@ export default function PortfolioDetails() {
             </div>
           </DialogContent>
         </Dialog>
+
+        {portfolio.ai_summary && (
+          <Card className="mb-8">
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <span className="bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">
+                  AI Portfolio Insights
+                </span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="prose prose-sm max-w-none dark:prose-invert min-h-[100px]">
+                {portfolio.ai_summary ? (
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    {portfolio.ai_summary}
+                  </ReactMarkdown>
+                ) : (
+                  <p className="text-muted-foreground">
+                    No AI insights available.
+                  </p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   )

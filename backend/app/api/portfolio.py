@@ -1,0 +1,362 @@
+from typing import List
+import uuid
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from sqlalchemy import select, update
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.api.api_functions import (
+    generate_ai_portfolio_summary,
+    get_current_user,
+    get_db,
+)
+from app.api.api_models import (
+    Asset,
+    AssetCreate,
+    Portfolio,
+    PortfolioCreateInput,
+    PortfolioOutput,
+    User,
+)
+from app.chat_provider.tools.finance_tools import (
+    get_stock_fastinfo,
+)
+from google.cloud import storage
+from sqlalchemy.orm import selectinload
+
+from app.chat_provider.extra_functions.exchange import get_exchange_rate
+
+
+portfolio_router = APIRouter(prefix="/portfolio")
+
+
+@portfolio_router.post("/create")
+async def create_portfolio(
+    portfolio_data: PortfolioCreateInput,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Create a new portfolio for the authenticated user."""
+    new_portfolio = Portfolio(
+        user_id=current_user.id,
+        name=portfolio_data.name,
+        description=portfolio_data.description,
+        gcs_document_link=None,
+    )
+    db.add(new_portfolio)
+    await db.commit()
+    await db.refresh(new_portfolio)
+    return {
+        "message": "Portfolio created successfully",
+        "portfolio_id": new_portfolio.id,
+    }
+
+
+@portfolio_router.post("/{portfolio_id}/upload_pdf")
+async def upload_pdf(
+    portfolio_id: int,
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Upload a PDF to an existing portfolio and store it in GCP bucket."""
+    stmt = select(Portfolio).where(
+        Portfolio.id == portfolio_id, Portfolio.user_id == current_user.id
+    )
+    result = await db.execute(stmt)
+    portfolio = result.scalars().first()
+    if not portfolio:
+        raise HTTPException(
+            status_code=404, detail="Portfolio not found or not authorized"
+        )
+
+    try:
+        client = storage.Client()
+        bucket = client.bucket("portfolios_bucket")
+        if file.filename and "." in file.filename:
+            file_extension = file.filename.split(".")[-1]
+        else:
+            file_extension = "pdf"
+        blob_name = f"user_{current_user.id}/portfolio_{portfolio_id}/{uuid.uuid4()}.{file_extension}"
+        blob = bucket.blob(blob_name)
+        blob.upload_from_file(file.file, content_type=file.content_type)
+        gcs_url = f"https://storage.googleapis.com/portfolios_bucket/{blob_name}"
+
+        setattr(portfolio, "gcs_document_link", gcs_url)
+        await db.commit()
+        return {"message": "PDF uploaded successfully", "gcs_document_link": gcs_url}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to upload PDF: {str(e)}")
+
+
+@portfolio_router.post("/{portfolio_id}/assets")
+async def create_portfolio_assets(
+    portfolio_id: str,
+    asset_data: AssetCreate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        stmt = select(Portfolio).where(
+            Portfolio.id == portfolio_id, Portfolio.user_id == current_user.id
+        )
+        result = await db.execute(stmt)
+        portfolio = result.scalars().first()
+        if not portfolio:
+            raise HTTPException(
+                status_code=404, detail="Portfolio not found or not authorized"
+            )
+        asset = Asset(portfolio_id=portfolio_id, **asset_data.dict())
+        db.add(asset)
+        await db.commit()
+        await db.refresh(asset)
+        return asset
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to create asset: {str(e)}")
+
+
+@portfolio_router.get("/{portfolio_id}")
+async def get_portfolio(
+    portfolio_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    stmt = (
+        select(Portfolio)
+        .where(Portfolio.id == portfolio_id, Portfolio.user_id == current_user.id)
+        .options(selectinload(Portfolio.assets))
+    )
+    result = await db.execute(stmt)
+    portfolio = result.scalars().first()
+    if not portfolio:
+        raise HTTPException(
+            status_code=404, detail="Portfolio not found or not authorized"
+        )
+
+    total_value_base = 0.0
+    total_day_gain_base = 0.0
+    total_gain_base = 0.0
+    assets_details = []
+
+    for asset in portfolio.assets:
+        asset: Asset = asset
+        asset_detail = {
+            "identifier": asset.identifier,
+            "asset_type": asset.asset_type,
+            "quantity": asset.quantity,
+            "purchase_price": asset.purchase_price,
+            "purchase_date": asset.purchase_date,
+            "value_base": 0.0,
+            "day_gain_base": 0.0,
+            "total_gain_base": 0.0,
+            "day_gain_percent": 0.0,
+            "total_gain_percent": 0.0,
+            "news": [],
+        }
+
+        if getattr(asset, "asset_type", None) == "Stock":
+            asset_identifier: str = getattr(asset, "identifier", "")
+            asset_quantity: float = getattr(asset, "quantity", 0)
+            asset_purchase_price: float = getattr(asset, "purchase_price", 0)
+            stock_fastinfo = get_stock_fastinfo(asset_identifier)
+
+            # news_data = fetch_finance_news(asset_identifier)
+            news_data = []
+            if (
+                isinstance(news_data, dict)
+                and news_data.get("status") == "OK"
+                and news_data.get("data", {}).get("tickerStream", {}).get("stream")
+            ):
+                news_items = (
+                    news_data.get("data", {}).get("tickerStream", {}).get("stream", [])
+                )
+                for item in news_items:
+                    content = item.get("content", {})
+                    if content.get("contentType") == "STORY" and content.get(
+                        "finance", {}
+                    ).get("stockTickers"):
+                        tickers = [
+                            ticker["symbol"]
+                            for ticker in content["finance"]["stockTickers"]
+                        ]
+                        if asset_identifier in tickers:
+                            news_entry = {
+                                "title": content.get("title", ""),
+                                "summary": content.get("summary", ""),
+                                "pubDate": content.get("pubDate", ""),
+                                "url": (content.get("clickThroughUrl") or {}).get(
+                                    "url", ""
+                                ),
+                            }
+                            asset_detail["news"].append(news_entry)
+
+            if not isinstance(stock_fastinfo, str):
+                stock_last_price = stock_fastinfo.last_price
+                stock_previous_close = stock_fastinfo.previous_close
+                stock_currency = stock_fastinfo.currency
+
+                if isinstance(stock_last_price, float):
+                    value_asset_currency = stock_last_price * asset_quantity
+                    if isinstance(stock_previous_close, float):
+                        day_gain_asset_currency = (
+                            stock_last_price - stock_previous_close
+                        ) * asset_quantity
+                        total_gain_asset_currency = (
+                            stock_last_price - asset_purchase_price
+                        ) * asset_quantity
+                        exchange_rate = get_exchange_rate(stock_currency, "INR")
+                        exchange_rate = 1
+
+                        value_base = value_asset_currency * exchange_rate
+                        day_gain_base = day_gain_asset_currency * exchange_rate
+                        total_gain_base = total_gain_asset_currency * exchange_rate
+                        day_gain_percent = (
+                            (
+                                (stock_last_price - stock_previous_close)
+                                / stock_previous_close
+                                * 100
+                            )
+                            if stock_previous_close != 0
+                            else 0
+                        )
+                        total_gain_percent = (
+                            (
+                                (stock_last_price - asset_purchase_price)
+                                / asset_purchase_price
+                                * 100
+                            )
+                            if asset_purchase_price != 0
+                            else 0
+                        )
+
+                        asset_detail.update(
+                            {
+                                "value_base": value_base,
+                                "day_gain_base": day_gain_base,
+                                "total_gain_base": total_gain_base,
+                                "day_gain_percent": day_gain_percent,
+                                "total_gain_percent": total_gain_percent,
+                            }
+                        )
+
+                        total_value_base += value_base
+                        total_day_gain_base += day_gain_base
+                        total_gain_base += total_gain_base
+
+        assets_details.append(asset_detail)
+        ai_portfolio_summary = await generate_ai_portfolio_summary(
+            portfolio_name=str(getattr(portfolio, "name", "")),
+            portfolio_value=total_value_base,
+            total_day_gain_inr=total_day_gain_base,
+            total_gain_inr=total_day_gain_base,
+            assets=assets_details,
+        )
+
+    portfolio_response = {
+        "id": portfolio.id,
+        "name": portfolio.name,
+        "total_value_inr": total_value_base,
+        "total_day_gain_inr": total_day_gain_base,
+        "total_gain_inr": total_gain_base,
+        "assets": assets_details,
+        "ai_summary": ai_portfolio_summary,
+    }
+
+    return portfolio_response
+
+
+@portfolio_router.get("/", response_model=List[PortfolioOutput])
+async def list_portfolios(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    stmt = (
+        select(Portfolio)
+        .where(Portfolio.user_id == current_user.id)
+        .options(selectinload(Portfolio.assets))
+    )
+    result = await db.execute(stmt)
+    portfolios = result.scalars().all()
+    return portfolios
+
+
+@portfolio_router.put("/{portfolio_id}/default")
+async def update_default_portfolio(
+    portfolio_id: str,
+    set_default: bool = Query(
+        ..., description="Set to true to make default, false to remove default"
+    ),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """
+    Update the default status of a portfolio for the authenticated user.
+    Setting a portfolio as default will unset any existing default portfolio.
+    """
+    # No need for `async with db.begin()` as AsyncSession manages transactions
+    # Verify portfolio exists and belongs to the user
+    stmt = select(Portfolio).where(
+        Portfolio.id == portfolio_id, Portfolio.user_id == current_user.id
+    )
+    result = await db.execute(stmt)
+    portfolio = result.scalars().first()
+
+    if not portfolio:
+        raise HTTPException(
+            status_code=404, detail="Portfolio not found or not authorized"
+        )
+
+    # If setting as default
+    if set_default:
+        # Reset any existing default portfolio
+        await db.execute(
+            update(Portfolio)
+            .where(Portfolio.user_id == current_user.id, Portfolio.is_default is True)
+            .values(is_default=False)
+        )
+        portfolio.is_default = True
+        message = f"Portfolio {portfolio.name} set as default"
+    else:
+        # Only update if portfolio was default
+        if portfolio.is_default:
+            portfolio.is_default = False
+            message = f"Portfolio {portfolio.name} is no longer default"
+        else:
+            message = f"Portfolio {portfolio.name} was not default"
+
+    await db.commit()
+    await db.refresh(portfolio)
+
+    return {
+        "message": message,
+        "portfolio_id": portfolio_id,
+        "is_default": portfolio.is_default,
+    }
+
+
+@portfolio_router.get("/{portfolio_id}/default_status")
+async def get_default_status(
+    portfolio_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Check if a portfolio is the default for the authenticated user."""
+    stmt = select(Portfolio).where(
+        Portfolio.id == portfolio_id, Portfolio.user_id == current_user.id
+    )
+    result = await db.execute(stmt)
+    portfolio = result.scalars().first()
+
+    if not portfolio:
+        raise HTTPException(
+            status_code=404, detail="Portfolio not found or not authorized"
+        )
+
+    return {
+        "portfolio_id": portfolio_id,
+        "is_default": portfolio.is_default,
+        "name": portfolio.name,
+    }

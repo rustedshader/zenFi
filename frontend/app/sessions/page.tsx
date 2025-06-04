@@ -2,12 +2,29 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle
+} from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Separator } from '@/components/ui/separator'
 import { toast } from 'sonner'
-import { Clock, MessageSquare, Loader2 } from 'lucide-react'
+import {
+  Clock,
+  MessageSquare,
+  Loader2,
+  ArrowRight,
+  Plus,
+  History
+} from 'lucide-react'
 
 type Session = {
   session_id: string
   created_at: string
+  summary?: string
 }
 
 export default function SessionsPage() {
@@ -28,6 +45,19 @@ export default function SessionsPage() {
       minute: '2-digit',
       hour12: true
     })
+  }
+
+  const getRelativeTime = (dateString: string) => {
+    const date = new Date(dateString)
+    const now = new Date()
+    const diffInHours = Math.floor(
+      (now.getTime() - date.getTime()) / (1000 * 60 * 60)
+    )
+
+    if (diffInHours < 1) return 'Just now'
+    if (diffInHours < 24) return `${diffInHours}h ago`
+    if (diffInHours < 168) return `${Math.floor(diffInHours / 24)}d ago`
+    return `${Math.floor(diffInHours / 168)}w ago`
   }
 
   useEffect(() => {
@@ -58,77 +88,104 @@ export default function SessionsPage() {
   }, [])
 
   return (
-    <div className="p-4 max-w-4xl mx-auto">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-        <div className="flex items-center gap-2">
-          <MessageSquare className="size-6" />
-          <h1 className="text-2xl font-bold">Chat History</h1>
+    <div className="container mx-auto px-4 py-8 max-w-4xl">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
+        <div className="space-y-1">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-primary/10">
+              <History className="h-6 w-6 text-primary" />
+            </div>
+            <h1 className="text-3xl font-bold tracking-tight">Chat History</h1>
+          </div>
+          <p className="text-muted-foreground">
+            Browse and continue your previous conversations
+          </p>
         </div>
-        <Button
-          onClick={() => router.push('/')}
-          className="w-full sm:w-auto bg-black hover:bg-gray-800 text-white"
-        >
+        <Button onClick={() => router.push('/')} className="gap-2" size="lg">
+          <Plus className="h-4 w-4" />
           New Chat
         </Button>
       </div>
+
+      <Separator className="mb-8" />
+
+      {/* Content */}
       {isLoading ? (
-        <div className="flex flex-col items-center justify-center py-12">
-          <Loader2 className="size-8 animate-spin text-gray-400 mb-4" />
-          <p className="text-gray-500">Loading chat history...</p>
+        <div className="flex flex-col items-center justify-center py-16">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground mb-4" />
+          <p className="text-muted-foreground text-lg">
+            Loading your conversations...
+          </p>
         </div>
       ) : sessions.length === 0 ? (
-        <div className="text-center py-12">
-          <div className="mb-4">
-            <MessageSquare className="size-12 mx-auto text-gray-400" />
-          </div>
-          <p className="text-gray-500 mb-4">No chat history found.</p>
-          <Button onClick={() => router.push('/chat')} variant="outline">
-            Start a New Chat
-          </Button>
-        </div>
+        <Card className="text-center py-16">
+          <CardContent className="space-y-4">
+            <div className="mx-auto w-16 h-16 rounded-full bg-muted flex items-center justify-center">
+              <MessageSquare className="h-8 w-8 text-muted-foreground" />
+            </div>
+            <div className="space-y-2">
+              <h3 className="text-xl font-semibold">No conversations yet</h3>
+              <p className="text-muted-foreground">
+                Start your first chat conversation to see it appear here
+              </p>
+            </div>
+            <Button
+              onClick={() => router.push('/chat')}
+              variant="outline"
+              className="gap-2"
+            >
+              <Plus className="h-4 w-4" />
+              Start a New Chat
+            </Button>
+          </CardContent>
+        </Card>
       ) : (
-        <div className="space-y-3">
-          {sessions.map(session => (
-            <div
+        <div className="space-y-4">
+          {sessions.map((session, index) => (
+            <Card
               key={session.session_id}
-              className="p-4 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors cursor-pointer"
+              className="cursor-pointer transition-all duration-200 hover:shadow-md hover:scale-[1.01] group"
               onClick={() => router.push(`/chat/${session.session_id}`)}
             >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-full bg-gray-100">
-                    <MessageSquare className="size-5 text-gray-900" />
-                  </div>
-                  <div className="flex flex-col">
-                    <span className="font-medium">Chat Conversation</span>
-                    <div className="flex items-center gap-1 text-sm text-gray-500">
-                      <Clock className="size-4" />
-                      <span>{formatDate(session.created_at)}</span>
+              <CardHeader className="pb-3">
+                <div className="flex items-start justify-between">
+                  <div className="flex items-start gap-3 flex-1 min-w-0">
+                    <div className="p-2 rounded-lg bg-primary/10 mt-1 flex-shrink-0">
+                      <MessageSquare className="h-5 w-5 text-primary" />
+                    </div>
+                    <div className="flex-1 min-w-0 space-y-1">
+                      <div className="flex items-center gap-2">
+                        <CardTitle className="text-lg">
+                          {session.summary || 'Chat Conversation'}
+                        </CardTitle>
+                        {index === 0 && (
+                          <Badge variant="secondary" className="text-xs">
+                            Latest
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                        <div className="flex items-center gap-1">
+                          <Clock className="h-4 w-4" />
+                          <span>{getRelativeTime(session.created_at)}</span>
+                        </div>
+                        <span className="hidden sm:inline">
+                          {formatDate(session.created_at)}
+                        </span>
+                      </div>
                     </div>
                   </div>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="text-gray-400 hover:text-gray-900"
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="24"
-                    height="24"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="size-4"
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
                   >
-                    <path d="m9 18 6-6-6-6" />
-                  </svg>
-                </Button>
-              </div>
-            </div>
+                    <ArrowRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </CardHeader>
+            </Card>
           ))}
         </div>
       )}

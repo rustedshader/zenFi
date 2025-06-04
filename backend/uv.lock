@@ -236,9 +236,9 @@ dependencies = [
     { name = "faker" },
     { name = "fastapi", extra = ["standard"] },
     { name = "forex-python" },
+    { name = "google-cloud-bigquery" },
     { name = "google-cloud-storage" },
     { name = "greenlet" },
-    { name = "jwt" },
     { name = "langchain-chroma" },
     { name = "langchain-experimental" },
     { name = "langchain-google-community" },
@@ -252,8 +252,13 @@ dependencies = [
     { name = "nselib" },
     { name = "pandas-market-calendars" },
     { name = "passlib" },
+    { name = "pdfminer-six" },
+    { name = "pdfplumber" },
     { name = "psycopg", extra = ["binary", "pool"] },
     { name = "psycopg2" },
+    { name = "pyjwt" },
+    { name = "pypdf2" },
+    { name = "python-docx" },
     { name = "python-dotenv" },
     { name = "python-jose" },
     { name = "redis" },
@@ -261,6 +266,7 @@ dependencies = [
     { name = "sqlalchemy" },
     { name = "tavily-python" },
     { name = "yfinance" },
+    { name = "youtube-search" },
 ]
 
 [package.metadata]
@@ -272,9 +278,9 @@ requires-dist = [
     { name = "faker", specifier = ">=37.3.0" },
     { name = "fastapi", extras = ["standard"], specifier = ">=0.115.12" },
     { name = "forex-python", specifier = ">=1.9.2" },
+    { name = "google-cloud-bigquery", specifier = ">=3.34.0" },
     { name = "google-cloud-storage", specifier = ">=3.1.0" },
     { name = "greenlet", specifier = ">=3.2.2" },
-    { name = "jwt", specifier = ">=1.3.1" },
     { name = "langchain-chroma", specifier = ">=0.2.3" },
     { name = "langchain-experimental", specifier = ">=0.3.4" },
     { name = "langchain-google-community", specifier = ">=2.0.7" },
@@ -288,8 +294,13 @@ requires-dist = [
     { name = "nselib", specifier = ">=1.9" },
     { name = "pandas-market-calendars", specifier = ">=5.1.0" },
     { name = "passlib", specifier = ">=1.7.4" },
+    { name = "pdfminer-six", specifier = ">=20250327" },
+    { name = "pdfplumber", specifier = ">=0.11.6" },
     { name = "psycopg", extras = ["binary", "pool"], specifier = ">=3.2.9" },
     { name = "psycopg2", specifier = ">=2.9.10" },
+    { name = "pyjwt", specifier = ">=2.10.1" },
+    { name = "pypdf2", specifier = ">=3.0.1" },
+    { name = "python-docx", specifier = ">=1.1.2" },
     { name = "python-dotenv", specifier = ">=1.1.0" },
     { name = "python-jose", specifier = ">=3.4.0" },
     { name = "redis", specifier = ">=6.1.0" },
@@ -297,6 +308,7 @@ requires-dist = [
     { name = "sqlalchemy", specifier = ">=2.0.41" },
     { name = "tavily-python", specifier = ">=0.7.3" },
     { name = "yfinance", specifier = ">=0.2.61" },
+    { name = "youtube-search", specifier = ">=2.1.2" },
 ]
 
 [[package]]
@@ -1316,6 +1328,24 @@ wheels = [
 ]
 
 [[package]]
+name = "google-cloud-bigquery"
+version = "3.34.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "google-api-core", extra = ["grpc"] },
+    { name = "google-auth" },
+    { name = "google-cloud-core" },
+    { name = "google-resumable-media" },
+    { name = "packaging" },
+    { name = "python-dateutil" },
+    { name = "requests" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/24/f9/e9da2d56d7028f05c0e2f5edf6ce43c773220c3172666c3dd925791d763d/google_cloud_bigquery-3.34.0.tar.gz", hash = "sha256:5ee1a78ba5c2ccb9f9a8b2bf3ed76b378ea68f49b6cac0544dc55cc97ff7c1ce", size = 489091, upload-time = "2025-05-29T17:18:06.03Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b1/7e/7115c4f67ca0bc678f25bff1eab56cc37d06eb9a3978940b2ebd0705aa0a/google_cloud_bigquery-3.34.0-py3-none-any.whl", hash = "sha256:de20ded0680f8136d92ff5256270b5920dfe4fae479f5d0f73e90e5df30b1cf7", size = 253555, upload-time = "2025-05-29T17:18:02.904Z" },
+]
+
+[[package]]
 name = "google-cloud-core"
 version = "2.4.3"
 source = { registry = "https://pypi.org/simple" }
@@ -1784,18 +1814,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/6a/0a/eebeb1fa92507ea94016a2a790b93c2ae41a7e18778f85471dc54475ed25/jsonpointer-3.0.0.tar.gz", hash = "sha256:2b2d729f2091522d61c3b31f82e11870f60b68f43fbc705cb76bf4b832af59ef", size = 9114, upload-time = "2024-06-10T19:24:42.462Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/71/92/5e77f98553e9e75130c78900d000368476aed74276eb8ae8796f65f00918/jsonpointer-3.0.0-py2.py3-none-any.whl", hash = "sha256:13e088adc14fca8b6aa8177c044e12701e6ad4b28ff10e65f2267a90109c9942", size = 7595, upload-time = "2024-06-10T19:24:40.698Z" },
-]
-
-[[package]]
-name = "jwt"
-version = "1.3.1"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "cryptography", version = "44.0.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
-    { name = "cryptography", version = "45.0.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
-]
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/ad/66/1e792aef36645b96271b4d27c2a8cc9fc7bbbaf06277a849b9e1a6360e6a/jwt-1.3.1-py3-none-any.whl", hash = "sha256:61c9170f92e736b530655e75374681d4fcca9cfa8763ab42be57353b2b203494", size = 18192, upload-time = "2021-10-07T05:19:03.073Z" },
 ]
 
 [[package]]
@@ -3093,6 +3111,34 @@ wheels = [
 ]
 
 [[package]]
+name = "pdfminer-six"
+version = "20250327"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "charset-normalizer" },
+    { name = "cryptography", version = "44.0.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
+    { name = "cryptography", version = "45.0.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/08/e9/4688ff2dd985f21380b9c8cd2fa8004bc0f2691f2c301082d767caea7136/pdfminer_six-20250327.tar.gz", hash = "sha256:57f6c34c2702df04cfa3191622a3db0a922ced686d35283232b00094f8914aa1", size = 7381506, upload-time = "2025-03-27T07:51:57.78Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/29/2f/409e174b5a0195aa6a814c7359a1285f1c887a4c84aff17ed03f607c06ba/pdfminer_six-20250327-py3-none-any.whl", hash = "sha256:5af494c85b1ecb7c28df5e3a26bb5234a8226a307503d9a09f4958bc154b16a9", size = 5617445, upload-time = "2025-03-27T07:51:55.502Z" },
+]
+
+[[package]]
+name = "pdfplumber"
+version = "0.11.6"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pdfminer-six" },
+    { name = "pillow" },
+    { name = "pypdfium2" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/ce/37/dca4c8290c252f530e52e758f58e211bb047b34e15d52703355a357524f4/pdfplumber-0.11.6.tar.gz", hash = "sha256:d0f419e031641d9eac70dc18c60e1fc3ca2ec28cce7e149644923c030a0003ff", size = 115611, upload-time = "2025-03-28T03:19:02.353Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e6/c4/d2e09fbc937d1f76baae34e526662cc718e23a904321bf4a40282d190033/pdfplumber-0.11.6-py3-none-any.whl", hash = "sha256:169fc2b8dbf328c81a4e9bab30af0c304ad4b472fd7816616eabdb79dc5d9d17", size = 60233, upload-time = "2025-03-28T03:19:00.929Z" },
+]
+
+[[package]]
 name = "peewee"
 version = "3.18.1"
 source = { registry = "https://pypi.org/simple" }
@@ -3595,6 +3641,15 @@ wheels = [
 ]
 
 [[package]]
+name = "pyjwt"
+version = "2.10.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/e7/46/bd74733ff231675599650d3e47f361794b22ef3e3770998dda30d3b63726/pyjwt-2.10.1.tar.gz", hash = "sha256:3cc5772eb20009233caf06e9d8a0577824723b44e6648ee0a2aedb6cf9381953", size = 87785, upload-time = "2024-11-28T03:43:29.933Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/61/ad/689f02752eeec26aed679477e80e632ef1b682313be70793d798c1d5fc8f/PyJWT-2.10.1-py3-none-any.whl", hash = "sha256:dcdd193e30abefd5debf142f9adfcdd2b58004e644f25406ffaebd50bd98dacb", size = 22997, upload-time = "2024-11-28T03:43:27.893Z" },
+]
+
+[[package]]
 name = "pyluach"
 version = "2.2.0"
 source = { registry = "https://pypi.org/simple" }
@@ -3610,6 +3665,35 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/bb/22/f1129e69d94ffff626bdb5c835506b3a5b4f3d070f17ea295e12c2c6f60f/pyparsing-3.2.3.tar.gz", hash = "sha256:b9c13f1ab8b3b542f72e28f634bad4de758ab3ce4546e4301970ad6fa77c38be", size = 1088608, upload-time = "2025-03-25T05:01:28.114Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/05/e7/df2285f3d08fee213f2d041540fa4fc9ca6c2d44cf36d3a035bf2a8d2bcc/pyparsing-3.2.3-py3-none-any.whl", hash = "sha256:a749938e02d6fd0b59b356ca504a24982314bb090c383e3cf201c95ef7e2bfcf", size = 111120, upload-time = "2025-03-25T05:01:24.908Z" },
+]
+
+[[package]]
+name = "pypdf2"
+version = "3.0.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/9f/bb/18dc3062d37db6c491392007dfd1a7f524bb95886eb956569ac38a23a784/PyPDF2-3.0.1.tar.gz", hash = "sha256:a74408f69ba6271f71b9352ef4ed03dc53a31aa404d29b5d31f53bfecfee1440", size = 227419, upload-time = "2022-12-31T10:36:13.13Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/8e/5e/c86a5643653825d3c913719e788e41386bee415c2b87b4f955432f2de6b2/pypdf2-3.0.1-py3-none-any.whl", hash = "sha256:d16e4205cfee272fbdc0568b68d82be796540b1537508cef59388f839c191928", size = 232572, upload-time = "2022-12-31T10:36:10.327Z" },
+]
+
+[[package]]
+name = "pypdfium2"
+version = "4.30.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/55/d4/905e621c62598a08168c272b42fc00136c8861cfce97afb2a1ecbd99487a/pypdfium2-4.30.1.tar.gz", hash = "sha256:5f5c7c6d03598e107d974f66b220a49436aceb191da34cda5f692be098a814ce", size = 164854, upload-time = "2024-12-19T19:28:11.459Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/30/8e/3ce0856b3af0f058dd3655ce57d31d1dbde4d4bd0e172022ffbf1b58a4b9/pypdfium2-4.30.1-py3-none-macosx_10_13_x86_64.whl", hash = "sha256:e07c47633732cc18d890bb7e965ad28a9c5a932e548acb928596f86be2e5ae37", size = 2889836, upload-time = "2024-12-19T19:27:39.531Z" },
+    { url = "https://files.pythonhosted.org/packages/c2/6a/f6995b21f9c6c155487ce7df70632a2df1ba49efcb291b9943ea45f28b15/pypdfium2-4.30.1-py3-none-macosx_11_0_arm64.whl", hash = "sha256:5ea2d44e96d361123b67b00f527017aa9c847c871b5714e013c01c3eb36a79fe", size = 2769232, upload-time = "2024-12-19T19:27:43.227Z" },
+    { url = "https://files.pythonhosted.org/packages/53/91/79060923148e6d380b8a299b32bba46d70aac5fe1cd4f04320bcbd1a48d3/pypdfium2-4.30.1-py3-none-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:1de7a3a36803171b3f66911131046d65a732f9e7834438191cb58235e6163c4e", size = 2847531, upload-time = "2024-12-19T19:27:46.372Z" },
+    { url = "https://files.pythonhosted.org/packages/a8/6c/93507f87c159e747eaab54352c0fccbaec3f1b3749d0bb9085a47899f898/pypdfium2-4.30.1-py3-none-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:b8a4231efb13170354f568c722d6540b8d5b476b08825586d48ef70c40d16e03", size = 2636266, upload-time = "2024-12-19T19:27:49.767Z" },
+    { url = "https://files.pythonhosted.org/packages/24/dc/d56f74a092f2091e328d6485f16562e2fc51cffb0ad6d5c616d80c1eb53c/pypdfium2-4.30.1-py3-none-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:6f434a4934e8244aa95343ffcf24e9ad9f120dbb4785f631bb40a88c39292493", size = 2919296, upload-time = "2024-12-19T19:27:51.767Z" },
+    { url = "https://files.pythonhosted.org/packages/be/d9/a2f1ee03d47fbeb48bcfde47ed7155772739622cfadf7135a84ba6a97824/pypdfium2-4.30.1-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:f454032a0bc7681900170f67d8711b3942824531e765f91c2f5ce7937f999794", size = 2866119, upload-time = "2024-12-19T19:27:53.561Z" },
+    { url = "https://files.pythonhosted.org/packages/01/47/6aa019c32aa39d3f33347c458c0c5887e84096cbe444456402bc97e66704/pypdfium2-4.30.1-py3-none-musllinux_1_1_aarch64.whl", hash = "sha256:bbf9130a72370ee9d602e39949b902db669a2a1c24746a91e5586eb829055d9f", size = 6228684, upload-time = "2024-12-19T19:27:56.781Z" },
+    { url = "https://files.pythonhosted.org/packages/4c/07/2954c15b3f7c85ceb80cad36757fd41b3aba0dd14e68f4bed9ce3f2e7e74/pypdfium2-4.30.1-py3-none-musllinux_1_1_i686.whl", hash = "sha256:5cb52884b1583b96e94fd78542c63bb42e06df5e8f9e52f8f31f5ad5a1e53367", size = 6231815, upload-time = "2024-12-19T19:28:00.351Z" },
+    { url = "https://files.pythonhosted.org/packages/b4/9b/b4667e95754624f4af5a912001abba90c046e1c80d4a4e887f0af664ffec/pypdfium2-4.30.1-py3-none-musllinux_1_1_x86_64.whl", hash = "sha256:1a9e372bd4867ff223cc8c338e33fe11055dad12f22885950fc27646cc8d9122", size = 6313429, upload-time = "2024-12-19T19:28:02.536Z" },
+    { url = "https://files.pythonhosted.org/packages/43/38/f9e77cf55ba5546a39fa659404b78b97de2ca344848271e7731efb0954cd/pypdfium2-4.30.1-py3-none-win32.whl", hash = "sha256:421f1cf205e213e07c1f2934905779547f4f4a2ff2f59dde29da3d511d3fc806", size = 2834989, upload-time = "2024-12-19T19:28:04.657Z" },
+    { url = "https://files.pythonhosted.org/packages/a4/f3/8d3a350efb4286b5ebdabcf6736f51d8e3b10dbe68804c6930b00f5cf329/pypdfium2-4.30.1-py3-none-win_amd64.whl", hash = "sha256:598a7f20264ab5113853cba6d86c4566e4356cad037d7d1f849c8c9021007e05", size = 2960157, upload-time = "2024-12-19T19:28:07.772Z" },
+    { url = "https://files.pythonhosted.org/packages/e1/6b/2706497c86e8d69fb76afe5ea857fe1794621aa0f3b1d863feb953fe0f22/pypdfium2-4.30.1-py3-none-win_arm64.whl", hash = "sha256:c2b6d63f6d425d9416c08d2511822b54b8e3ac38e639fc41164b1d75584b3a8c", size = 2814810, upload-time = "2024-12-19T19:28:09.857Z" },
 ]
 
 [[package]]
@@ -3684,6 +3768,19 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/66/c0/0c8b6ad9f17a802ee498c46e004a0eb49bc148f2fd230864601a86dcf6db/python-dateutil-2.9.0.post0.tar.gz", hash = "sha256:37dd54208da7e1cd875388217d5e00ebd4179249f90fb72437e91a35459a0ad3", size = 342432, upload-time = "2024-03-01T18:36:20.211Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/ec/57/56b9bcc3c9c6a792fcbaf139543cee77261f3651ca9da0c93f5c1221264b/python_dateutil-2.9.0.post0-py2.py3-none-any.whl", hash = "sha256:a8b2bc7bffae282281c8140a97d3aa9c14da0b136dfe83f850eea9a5f7470427", size = 229892, upload-time = "2024-03-01T18:36:18.57Z" },
+]
+
+[[package]]
+name = "python-docx"
+version = "1.1.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "lxml" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/35/e4/386c514c53684772885009c12b67a7edd526c15157778ac1b138bc75063e/python_docx-1.1.2.tar.gz", hash = "sha256:0cf1f22e95b9002addca7948e16f2cd7acdfd498047f1941ca5d293db7762efd", size = 5656581, upload-time = "2024-05-01T19:41:57.772Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/3e/3d/330d9efbdb816d3f60bf2ad92f05e1708e4a1b9abe80461ac3444c83f749/python_docx-1.1.2-py3-none-any.whl", hash = "sha256:08c20d6058916fb19853fcf080f7f42b6270d89eac9fa5f8c15f691c0017fabe", size = 244315, upload-time = "2024-05-01T19:41:47.006Z" },
 ]
 
 [[package]]
@@ -4897,6 +4994,18 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/c1/28/152c38b35453b7d08d56df8ebf81d85448655c5a99b56baae7424f0f8db6/yfinance-0.2.61.tar.gz", hash = "sha256:dc704a23776a43dbd97f352469e6cea8193e9e6cb69d82490bc1a4e6ada6ca37", size = 127391, upload-time = "2025-05-12T08:22:08.846Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/73/b5/d50eec88bc731bb8570ae42a9b764a36144e217361c33fa068391ff59ba3/yfinance-0.2.61-py2.py3-none-any.whl", hash = "sha256:e52d0fea9deffa55b81496f548104418ca4e6aa5629335064c7d485d355b4dbf", size = 117870, upload-time = "2025-05-12T08:22:07.245Z" },
+]
+
+[[package]]
+name = "youtube-search"
+version = "2.1.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "requests" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/d1/66/87d6d426e6e7cbd9b675d712f2538d55023cb9394411e54cdb60cdc9e002/youtube-search-2.1.2.tar.gz", hash = "sha256:5749a6d8076fda65557c91367f0fab0936290ecdea457c831c9f3f05918a3aa2", size = 3167, upload-time = "2022-10-05T01:47:44.695Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/00/4e/548b906dd72bb51f700feb4f2200de3e0c64b34509d3173afb196ad7f1b9/youtube_search-2.1.2-py3-none-any.whl", hash = "sha256:f9cfaaf7c59806777eb29d3b8acee96b50e80f73a0621c2bb220d4e5beb09e4f", size = 3395, upload-time = "2022-10-05T01:47:42.63Z" },
 ]
 
 [[package]]

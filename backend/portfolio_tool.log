@@ -1,0 +1,40 @@
+2025-06-02 05:12:27,000 - uvicorn.error - INFO - Started server process [1192]
+2025-06-02 05:12:27,001 - uvicorn.error - INFO - Waiting for application startup.
+2025-06-02 05:12:27,039 - uvicorn.error - INFO - Application startup complete.
+2025-06-02 05:12:27,736 - __main__ - INFO - Starting portfolio tool script
+2025-06-02 05:12:27,742 - __main__ - INFO - Connecting to database: postgresql://postgres:postgres@localhost:5434/postgres
+2025-06-02 05:12:27,864 - __main__ - INFO - State graph built successfully
+2025-06-02 05:12:27,864 - __main__ - INFO - Streaming responses for portfolio query
+2025-06-02 05:12:27,864 - __main__ - INFO - Processing user input: What is my portfolio name and when is it created at ? for thread_id: 1, user_id: 1
+2025-06-02 05:12:27,873 - __main__ - INFO - Portfolio query detected: what is my portfolio name and when is it created at ?
+2025-06-02 05:12:35,663 - __main__ - INFO - Model response: Your portfolio name is "test". I am unable to find the creation date of your portfolio. I am designed to provide general financial information and do not have access to your personal portfolio details beyond the portfolio name.
+
+Would you like to explore other financial topics like:
+
+*   Different investment options?
+*   How to diversify a portfolio?
+*   Understanding risk and return?
+
+I am here to help!
+2025-06-02 05:12:35,673 - __main__ - INFO - Streaming output: Your portfolio name is "test". I am unable to find the creation date of your portfolio. I am designed to provide general financial information and do not have access to your personal portfolio details beyond the portfolio name.
+
+Would you like to explore other financial topics like:
+
+*   Different investment options?
+*   How to diversify a portfolio?
+*   Understanding risk and return?
+
+I am here to help!
+2025-06-02 05:12:35,673 - __main__ - INFO - Received chunk: Your portfolio name is "test". I am unable to find the creation date of your portfolio. I am designed to provide general financial information and do not have access to your personal portfolio details beyond the portfolio name.
+
+Would you like to explore other financial topics like:
+
+*   Different investment options?
+*   How to diversify a portfolio?
+*   Understanding risk and return?
+
+I am here to help!
+2025-06-02 05:14:07,964 - uvicorn.error - INFO - Shutting down
+2025-06-02 05:14:08,066 - uvicorn.error - INFO - Waiting for application shutdown.
+2025-06-02 05:14:08,067 - uvicorn.error - INFO - Application shutdown complete.
+2025-06-02 05:14:08,067 - uvicorn.error - INFO - Finished server process [1192]

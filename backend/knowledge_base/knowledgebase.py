@@ -3,8 +3,10 @@ from chromadb import PersistentClient
 from langchain_chroma import Chroma
 from langchain_community.document_loaders import DirectoryLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_google_genai.embeddings import GoogleGenerativeAIEmbeddings
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
+
 from dotenv import load_dotenv
+from langchain_google_vertexai import VertexAIEmbeddings
 
 load_dotenv()
 
@@ -15,7 +17,8 @@ CHUNK_SIZE = 500
 CHUNK_OVERLAP = 50
 HIDE_SOURCE_DOCUMENTS = False
 
-GEMINI_API_KEY = os.environ.get["GOOGLE_GEMINI_API_KEY"]
+GOOGLE_API_KEY = os.environ.get["GOOGLE_API_KEY"]
+project_id = os.environ.get("PROJECT_ID")
 
 
 class MyKnowledgeBase:
@@ -69,10 +72,8 @@ class MyKnowledgeBase:
         chunked_documents = self.split_documents(loaded_docs=loaded_pdfs)
 
         print("=> PDF loading and chunking done.")
-
-        embeddings = GoogleGenerativeAIEmbeddings(
-            model="models/text-embedding-004",
-            google_api_key=GEMINI_API_KEY,
+        embeddings = VertexAIEmbeddings(
+            model_name="text-embedding-005", project=project_id
         )
         self.convert_document_to_embeddings(
             chunked_docs=chunked_documents, embedder=embeddings

@@ -44,9 +44,7 @@ export default function Header() {
   const debounceRef = useRef<NodeJS.Timeout | null>(null)
 
   const getMarketStatusInfo = (status: string) => {
-    const isLive =
-      status.toLowerCase().includes('open') ||
-      status.toLowerCase().includes('live')
+    const isLive = status.toLowerCase().includes('active')
     return {
       isLive,
       text: isLive ? 'Market Open' : 'Market Closed',
@@ -55,30 +53,26 @@ export default function Header() {
     }
   }
 
-  useEffect(() => {
-    const fetchMarketStatus = async () => {
-      if (!isLoggedIn) {
-        setMarketStatus('') // Clear market status if not logged in
-        return
-      }
+  // const fetchMarketStatus = async () => {
+  //   if (!isLoggedIn) {
+  //     setMarketStatus('') // Clear market status if not logged in
+  //     return
+  //   }
 
-      try {
-        const response = await fetch('/api/dashboard/market_status', {
-          credentials: 'include' // Include cookies
-        })
-        if (!response.ok) throw new Error('Failed to fetch market info')
-        const data: DashboardInfo = await response.json()
-        setMarketStatus(data.market_status)
-      } catch (error) {
-        console.error('Error fetching market status:', error)
-        setMarketStatus('')
-      }
-    }
+  //   try {
+  //     const response = await fetch('/api/dashboard/market_status', {
+  //       credentials: 'include' // Include cookies
+  //     })
+  //     if (!response.ok) throw new Error('Failed to fetch market info')
+  //     const data: DashboardInfo = await response.json()
+  //     setMarketStatus(data.market_status)
+  //   } catch (error) {
+  //     console.error('Error fetching market status:', error)
+  //     setMarketStatus('')
+  //   }
+  // }
 
-    fetchMarketStatus()
-    const interval = setInterval(fetchMarketStatus, 30000)
-    return () => clearInterval(interval)
-  }, [isLoggedIn])
+  // const interval = setInterval(fetchMarketStatus, 300000)
 
   const handleLogout = () => {
     router.push(`/login`)
@@ -132,6 +126,11 @@ export default function Header() {
       setIsLoading(false)
     }
   }
+
+  useEffect(() => {
+    // fetchMarketStatus()
+    // return () => clearInterval(interval)
+  }, [isLoggedIn])
 
   useEffect(() => {
     if (debounceRef.current) {
@@ -240,6 +239,12 @@ export default function Header() {
                 >
                   Portfolio
                 </Button>
+                <Button
+                  variant="ghost"
+                  onClick={() => router.push('/knowledge_base')}
+                >
+                  Finance Knowledge Base
+                </Button>
                 <Button variant="ghost" onClick={() => router.push('/news')}>
                   News
                 </Button>
@@ -249,11 +254,6 @@ export default function Header() {
                     <Button variant="ghost">More</Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    <DropdownMenuItem
-                      onClick={() => router.push('/knowledge_base')}
-                    >
-                      Knowledge Base
-                    </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => router.push('/sessions')}>
                       Chat History
                     </DropdownMenuItem>
@@ -271,14 +271,19 @@ export default function Header() {
               </>
             ) : (
               <>
-                <Button variant="ghost" onClick={() => router.push('/login')}>
-                  Login
-                </Button>
                 <Button
                   variant="default"
                   onClick={() => router.push('/register')}
+                  className="border rounded-full"
                 >
-                  Register
+                  Sign Up
+                </Button>
+                <Button
+                  variant="ghost"
+                  onClick={() => router.push('/login')}
+                  className="border rounded-full"
+                >
+                  Sign In
                 </Button>
               </>
             )}
