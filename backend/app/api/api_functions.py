@@ -145,6 +145,7 @@ class ChatServiceManager:
         async with self.semaphore:
             DB_URI = "postgresql://postgres:postgres@localhost:5434/postgres"
             async with AsyncPostgresSaver.from_conn_string(DB_URI) as checkpointer:
+                await checkpointer.setup()
                 self.chat_services.build_graph(checkpointer=checkpointer)
 
                 result = self.chat_services.stream_input(
