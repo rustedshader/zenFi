@@ -3,7 +3,7 @@ from langchain_core.tools import tool
 import json
 
 
-def get_stock_fastinfo(symbol: str):
+async def get_stock_fastinfo(symbol: str):
     try:
         dat = yfinance.Ticker(symbol)
         return dat.fast_info

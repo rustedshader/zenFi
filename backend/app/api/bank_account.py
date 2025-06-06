@@ -22,7 +22,6 @@ from app.chat_provider.account_aggreator.account_data import (
     generate_fake_account_data,
 )
 
-
 bank_account_link_router = APIRouter(prefix="/bank_account")
 
 

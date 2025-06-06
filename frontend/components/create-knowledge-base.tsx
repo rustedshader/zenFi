@@ -14,6 +14,21 @@ import {
   DialogTitle,
   DialogTrigger
 } from '@/components/ui/dialog'
+import { Switch } from '@/components/ui/switch'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow
+} from '@/components/ui/table'
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger
+} from '@/components/ui/accordion'
 
 interface KnowledgeBase {
   id: string
@@ -102,6 +117,7 @@ function CreateKnowledgeBaseForm({ onCreate }: { onCreate: () => void }) {
 
 export default function KnowledgeBase() {
   const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeBase[]>([])
+  const [viewMode, setViewMode] = useState<'card' | 'table'>('card')
   const router = useRouter()
 
   useEffect(() => {
@@ -118,34 +134,108 @@ export default function KnowledgeBase() {
     }
   }
 
+  const handleKnowledgeBaseClick = (id: string) => {
+    router.push(`/knowledge_base/${id}`)
+  }
+
   return (
     <div className="container mx-auto p-4">
+      <Accordion type="single" collapsible className="mb-6">
+        <AccordionItem value="item-1">
+          <AccordionTrigger>About Financial Knowledge Base</AccordionTrigger>
+          <AccordionContent>
+            The Financial Knowledge Base allows you to upload and organize your
+            financial data, such as transactions, investments, and budgets. Once
+            uploaded, you can query this data through our chat interface to gain
+            insights, generate reports, or analyze trends. Create a new
+            knowledge base to start managing your financial information
+            efficiently.
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
+
       <div className="flex justify-between items-center mb-4">
         <h1 className="text-2xl font-bold">Finance Knowledge Base</h1>
-        <CreateKnowledgeBaseForm onCreate={fetchKnowledgeBases} />
+        <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-2">
+            <Label htmlFor="view-toggle">Table View</Label>
+            <Switch
+              id="view-toggle"
+              checked={viewMode === 'table'}
+              onCheckedChange={() =>
+                setViewMode(viewMode === 'card' ? 'table' : 'card')
+              }
+            />
+          </div>
+          <CreateKnowledgeBaseForm onCreate={fetchKnowledgeBases} />
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {knowledgeBases.map(kb => (
-          <Card
-            key={kb.id}
-            className="cursor-pointer hover:shadow-lg transition-shadow"
-            onClick={() => router.push(`/knowledge_base/${kb.id}`)}
-          >
-            <CardHeader>
-              <CardTitle>{kb.name}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">
-                {kb.description || 'No description'}
-              </p>
-              <p className="text-xs text-muted-foreground mt-2">
-                Created: {new Date(kb.created_at).toLocaleDateString()}
-              </p>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      {knowledgeBases.length === 0 ? (
+        <div className="text-center text-gray-500 py-12">
+          No knowledge bases found. Create one to get started!
+        </div>
+      ) : viewMode === 'card' ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {knowledgeBases.map(kb => (
+            <Card
+              key={kb.id}
+              className="cursor-pointer hover:shadow-lg transition-shadow"
+              onClick={() => handleKnowledgeBaseClick(kb.id)}
+            >
+              <CardHeader>
+                <CardTitle>{kb.name}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground">
+                  {kb.description || 'No description'}
+                </p>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Created: {new Date(kb.created_at).toLocaleDateString()}
+                </p>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      ) : (
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Name</TableHead>
+              <TableHead>Description</TableHead>
+              <TableHead>Created</TableHead>
+              <TableHead>Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {knowledgeBases.map(kb => (
+              <TableRow
+                key={kb.id}
+                className="cursor-pointer"
+                onClick={() => handleKnowledgeBaseClick(kb.id)}
+              >
+                <TableCell>{kb.name}</TableCell>
+                <TableCell>{kb.description || 'No description'}</TableCell>
+                <TableCell>
+                  {new Date(kb.created_at).toLocaleDateString()}
+                </TableCell>
+                <TableCell>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={e => {
+                      e.stopPropagation()
+                      handleKnowledgeBaseClick(kb.id)
+                    }}
+                  >
+                    View
+                  </Button>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      )}
     </div>
   )
 }

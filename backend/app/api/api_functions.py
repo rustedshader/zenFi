@@ -2,7 +2,6 @@ import os
 import json
 import re
 import asyncio
-import datetime
 from uuid import UUID as uuid_UUID
 
 from dotenv import load_dotenv
@@ -13,7 +12,7 @@ from sqlalchemy.future import select
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 import sqlalchemy
 from passlib.context import CryptContext
-from typing import AsyncGenerator, Dict, List, Optional
+from typing import AsyncGenerator, Dict, List
 
 from langchain_google_genai import (
     ChatGoogleGenerativeAI,
@@ -25,15 +24,10 @@ from redis.asyncio import Redis
 from app.api.api_models import Base, ChatMessage, ChatResponse, User
 from app.chat_provider.service.deepsearch_service import DeepSearchChatService
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
-
-from app.chat_provider.service.portfolio_summary_service import (
-    PortfolioSummaryService,
-)
-from fastapi import status
+from app.config.config import GEMINI_API_KEY, redis_url
 
 load_dotenv()
 
-redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
 redis_client = Redis.from_url(redis_url, decode_responses=True)
 
 engine = create_async_engine(
@@ -112,7 +106,6 @@ safety_settings = {
     HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
 }
 
-GEMINI_API_KEY = os.environ.get("GOOGLE_GEMINI_API_KEY", "")
 
 deepresearch_llm = ChatGoogleGenerativeAI(
     model="gemini-2.5-pro-preview-03-25",
@@ -247,7 +240,7 @@ async def generate_ai_portfolio_summary(
     """
 
     portfolio_summary_service = cc.stream_message(
-        "", isDeepSearch=False, message=input_prompt
+        session_id="", isDeepSearch=False, message=input_prompt, user_id=""
     )
     summary = ""
     async for chunk in portfolio_summary_service:

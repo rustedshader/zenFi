@@ -80,7 +80,6 @@ async def stream_chat(
                             full_response += part
                             yield f'data: {{"type":"token","content":{json.dumps(part)}}}\n\n'
                             await asyncio.sleep(0.01)
-            # Only save the bot message if there’s a valid response
             if full_response.strip():
                 bot_message = ChatMessage(
                     session_id=session.id,

@@ -92,6 +92,7 @@ class SearchState(TypedDict):
 class AppState(TypedDict):
     messages: Annotated[list, add_messages]
     needs_portfolio: Optional[bool]
+    needs_knowledge_base: Optional[bool]
     search_queries: list[str]
     search_sufficient: Optional[bool]
     summary: Optional[str]

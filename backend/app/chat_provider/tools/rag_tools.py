@@ -6,7 +6,6 @@ from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 import sqlalchemy
 import os
-from app.chat_provider.service.knowledge_base.knowledege_base import search_enhanced
 
 engine = create_async_engine(
     sqlalchemy.engine.url.URL.create(
@@ -27,22 +26,6 @@ AsyncSessionLocal = async_sessionmaker(
 async def get_db():
     async with AsyncSessionLocal() as session:
         yield session
-
-
-@tool
-def ingested_web_search(query: str, context: str) -> str:
-    """
-    Search within ingested web documents for a specific context.
-
-    Args:
-        query (str): The search query to find relevant information.
-        context (str): The context to search within, e.g., "langsmith_pricing", "cloud_workstations", "bigframes", "dataplex".
-
-    Returns:
-        str: The answer generated based on the ingested documents.
-    """
-    filter = {"context": context}
-    return search_enhanced(query=query, filter=filter)
 
 
 @tool

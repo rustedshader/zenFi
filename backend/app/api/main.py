@@ -13,6 +13,7 @@ from app.api.portfolio import portfolio_router
 from app.api.chat import chat_router
 from app.api.auth import auth_router
 from app.api.knowledge_base import knowledge_base_router
+from app.api.news import news_api_router
 
 app = FastAPI(
     title="Your API", description="API with OAuth2 authentication", version="1.0.0"
@@ -39,6 +40,7 @@ app.include_router(stock_router)
 app.include_router(portfolio_router)
 app.include_router(chat_router)
 app.include_router(knowledge_base_router)
+app.include_router(news_api_router)
 
 
 # Session Management

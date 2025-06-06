@@ -3,7 +3,6 @@ from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile, File
 from google.cloud import bigquery
 from uuid import uuid4
 from typing import List
-import os
 from langchain_google_genai import (
     ChatGoogleGenerativeAI,
     HarmBlockThreshold,
@@ -17,10 +16,12 @@ from app.api.api_models import (
     KnowledgeBaseOutput,
     QueryRequest,
     QueryResponse,
+    SetDefaultKnowledgeBaseInput,
     User,
 )
 from app.api.api_functions import get_current_user
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import update
 
 from app.api.api_functions import get_db
 from sqlalchemy.future import select
@@ -33,12 +34,10 @@ from app.chat_provider.service.knowledge_base.knowledege_base import (
     ingest_documents_enhanced,
     set_knowledge_base_as_default,
 )
+from app.config.config import GEMINI_API_KEY, project_id
 
 # -----------------Prequiste-------------#
 # ---------------------------------------#
-
-GEMINI_API_KEY = os.environ.get("GOOGLE_GEMINI_API_KEY", "")
-GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY")
 
 safety_settings = {
     HarmCategory.HARM_CATEGORY_UNSPECIFIED: HarmBlockThreshold.BLOCK_NONE,
@@ -53,8 +52,6 @@ rag_llm = ChatGoogleGenerativeAI(
     api_key=GEMINI_API_KEY,
     safety_settings=safety_settings,
 )
-
-project_id = os.environ.get("PROJECT_ID")
 
 dataset_id = "zenf_dataset"
 client = bigquery.Client()
@@ -141,7 +138,6 @@ async def upload_file_to_knowledge_base(
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid knowledge base ID format")
 
-    # Check if knowledge base exists and belongs to user
     stmt = select(KnowledgeBase).where(
         KnowledgeBase.id == kb_uuid, KnowledgeBase.user_id == current_user.id
     )
@@ -152,7 +148,6 @@ async def upload_file_to_knowledge_base(
             status_code=404, detail="Knowledge base not found or access denied"
         )
 
-    # Ensure either file or URL is provided, but not both
     if (file is None and url is None) or (file is not None and url is not None):
         raise HTTPException(
             status_code=400, detail="Provide either a file or a URL, but not both"
@@ -160,7 +155,6 @@ async def upload_file_to_knowledge_base(
 
     try:
         if file:
-            # Validate file type (only PDF supported)
             if not file.filename.lower().endswith(".pdf"):
                 raise HTTPException(
                     status_code=400, detail="Only PDF files are supported"
@@ -171,7 +165,6 @@ async def upload_file_to_knowledge_base(
 
             try:
                 print("Trying yo ingest vector to table id", kb.table_id)
-                # Process PDF with ingest_pdf_vectors
                 ingest_documents_enhanced(
                     pdf_file=pdf_file,
                     context="some_context",
@@ -217,7 +210,6 @@ async def query_knowledge_base(
 ):
     """Query the knowledge base using RAG (Retrieval Augmented Generation)"""
 
-    # Verify knowledge base exists and belongs to user
     try:
         kb_uuid = uuid.UUID(knowledge_base_id)
     except ValueError:
@@ -238,7 +230,6 @@ async def query_knowledge_base(
             status_code=500, detail="Knowledge base has no table_id set"
         )
 
-    # Check if knowledge base has any documents
     count_query = f"""
     SELECT COUNT(*) as doc_count
     FROM `{project_id}.{dataset_id}.{kb.table_id}`
@@ -259,7 +250,7 @@ async def query_knowledge_base(
             status_code=500, detail=f"Error checking knowledge base: {str(e)}"
         )
 
-    print("Trying Rag Query")
+    print("LOG: Trying Rag Query for knowledge Base")
 
     try:
         rag_result = search_enhanced(
@@ -290,3 +281,47 @@ async def get_user_knowledge_base(
     result = await db.execute(stmt)
     knowledge_bases = result.scalars().all()
     return knowledge_bases
+
+
+@knowledge_base_router.post(
+    "/set_default_knowledge_base",
+    response_model=List[KnowledgeBaseOutput],
+)
+async def set_default_knowledge_base(
+    knowledge_base: SetDefaultKnowledgeBaseInput,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    # First, unset any existing default knowledge base
+    await db.execute(
+        update(KnowledgeBase).where(KnowledgeBase.is_default).values(is_default=False)
+    )
+
+    kb_uuid = uuid.UUID(knowledge_base.knowledge_base_id)
+
+    # Set the specified knowledge base as default
+    await db.execute(
+        update(KnowledgeBase).where(KnowledgeBase.id == kb_uuid).values(is_default=True)
+    )
+
+    # Commit the changes
+    await db.commit()
+
+    # Fetch all knowledge bases to return
+    result = await db.execute(select(KnowledgeBase))
+    knowledge_bases = result.scalars().all()
+
+    return knowledge_bases
+
+
+@knowledge_base_router.get("/{knowledge_base_id}/info")
+async def get_knowledge_base_info(
+    knowledge_base_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    stmt = select(KnowledgeBase).where(KnowledgeBase.id == uuid.UUID(knowledge_base_id))
+
+    result = await db.execute(stmt)
+    kb_data = result.scalar_one_or_none()
+    return kb_data

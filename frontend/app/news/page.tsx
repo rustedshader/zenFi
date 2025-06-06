@@ -1,24 +1,36 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { toast } from 'sonner'
+import { RefreshCcw, AlertCircle, Clock, Globe, Search } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import {
-  RefreshCcw,
-  AlertCircle,
-  ChevronRight,
-  Clock,
-  Globe
-} from 'lucide-react'
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle
+} from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger
+} from '@/components/ui/accordion'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 
 interface NewsItem {
-  headline: string
+  topic: string
+  description: string
+  content: string
+  sources: string[]
   summary: string
-  source: string
   publishedAt: string
 }
 
-interface NewsResponse {
-  news: NewsItem[]
+const cleanSource = (source: string): string => {
+  return source.split('|').pop()?.trim() || source || 'Unknown source'
 }
 
 export default function NewsFeed() {
@@ -34,12 +46,22 @@ export default function NewsFeed() {
         throw new Error('Failed to fetch news')
       }
       const data = await response.json()
-      // If data.news exists, use it; otherwise, assume data is the news array
-      setNews(data.news || data)
-      toast.success('News updated successfully')
+
+      const formattedNews: NewsItem[] = data.map((item: any) => ({
+        topic: item.topic || 'Untitled News',
+        description: item.description || 'No description available',
+        content: item.content || 'No content available',
+        sources:
+          Array.isArray(item.sources) && item.sources.length > 0
+            ? item.sources
+            : ['Unknown source'],
+        summary: item.summary || 'No summary available',
+        publishedAt: new Date().toISOString().split('T')[0]
+      }))
+
+      setNews(formattedNews)
     } catch (error) {
       console.error('Error fetching news:', error)
-      toast.error('Failed to update news')
     } finally {
       setIsLoading(false)
     }
@@ -51,104 +73,132 @@ export default function NewsFeed() {
 
   const filteredNews = news.filter(
     item =>
-      item.headline.toLowerCase().includes(filter.toLowerCase()) ||
+      item.topic.toLowerCase().includes(filter.toLowerCase()) ||
       item.summary.toLowerCase().includes(filter.toLowerCase()) ||
-      item.source.toLowerCase().includes(filter.toLowerCase())
+      item.description.toLowerCase().includes(filter.toLowerCase()) ||
+      item.sources.some(source =>
+        source.toLowerCase().includes(filter.toLowerCase())
+      )
   )
 
   return (
-    <div className="max-w-4xl mx-auto p-6">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold text-slate-800">
-          <span className="text-blue-600">Zenfi AI</span> News
-        </h1>
-        <div className="flex items-center gap-4">
-          <div className="relative">
-            <input
-              type="text"
-              placeholder="Filter news..."
-              className="px-4 py-2 pr-8 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              value={filter}
-              onChange={e => setFilter(e.target.value)}
-            />
-            {filter && (
-              <button
-                className="absolute right-2 top-2.5 text-gray-400 hover:text-gray-600"
-                onClick={() => setFilter('')}
-              >
-                ×
-              </button>
-            )}
-          </div>
-          <button
-            onClick={fetchNews}
-            disabled={isLoading}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
-          >
-            <RefreshCcw size={16} className={isLoading ? 'animate-spin' : ''} />
-            Refresh
-          </button>
+    <div className="max-w-4xl mx-auto p-6 space-y-6">
+      <div className="space-y-4">
+        <h1 className="text-3xl font-bold">News</h1>
+
+        <Accordion type="single" collapsible className="w-full">
+          <AccordionItem value="about-zenfi">
+            <AccordionTrigger>About Zenfi News</AccordionTrigger>
+            <AccordionContent>
+              <div className="space-y-2 text-sm text-muted-foreground">
+                <p>
+                  Zenfi News provides real-time financial and market updates
+                  powered by AI-driven analysis. Our platform aggregates news
+                  from trusted sources to keep you informed about the latest
+                  market movements, corporate developments, and economic trends.
+                </p>
+                <p>
+                  Stay ahead of the market with curated news stories,
+                  comprehensive summaries, and direct links to original sources
+                  for deeper insights.
+                </p>
+              </div>
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
+      </div>
+
+      <div className="flex gap-4 items-center">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+          <Input
+            type="text"
+            placeholder="Filter news..."
+            className="pl-10"
+            value={filter}
+            onChange={e => setFilter(e.target.value)}
+          />
         </div>
+        <Button onClick={fetchNews} disabled={isLoading} variant="outline">
+          <RefreshCcw
+            className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`}
+          />
+          Refresh
+        </Button>
       </div>
 
       {isLoading && news.length === 0 && (
         <div className="flex justify-center items-center h-64">
-          <div className="text-center">
-            <RefreshCcw
-              size={32}
-              className="animate-spin mx-auto mb-4 text-blue-600"
-            />
-            <p className="text-gray-600">Loading the latest news...</p>
+          <div className="text-center space-y-2">
+            <RefreshCcw className="h-8 w-8 animate-spin mx-auto text-muted-foreground" />
+            <p className="text-muted-foreground">Loading the latest news...</p>
           </div>
         </div>
       )}
 
       {!isLoading && news.length === 0 && (
-        <div className="flex justify-center items-center h-64 border-2 border-dashed rounded-lg bg-gray-50">
-          <div className="text-center p-6">
-            <AlertCircle size={32} className="mx-auto mb-4 text-amber-500" />
-            <h3 className="text-lg font-medium text-gray-900">
-              No news available
-            </h3>
-            <p className="mt-1 text-gray-600">
-              Check your connection or try again later.
-            </p>
-          </div>
-        </div>
+        <Alert>
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            No news available. Check your connection or try again later.
+          </AlertDescription>
+        </Alert>
       )}
 
       {filteredNews.length === 0 && filter && !isLoading && (
-        <div className="text-center p-8 bg-gray-50 rounded-lg">
-          <p className="text-gray-600">
-            No results found for &quot;{filter}&quot;
-          </p>
-        </div>
+        <Alert>
+          <AlertDescription>No results found for "{filter}"</AlertDescription>
+        </Alert>
       )}
 
-      <div className="grid gap-6">
+      <div className="space-y-4">
         {filteredNews.map((item, index) => (
-          <div
-            key={index}
-            className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow"
-          >
-            <div className="p-6">
-              <h2 className="text-xl font-semibold text-gray-900 mb-2 line-clamp-2">
-                {item.headline}
-              </h2>
-              <p className="text-gray-700 mb-4 line-clamp-3">{item.summary}</p>
-              <div className="flex justify-between items-center text-sm">
-                <div className="flex items-center gap-2 text-gray-500">
-                  <Globe size={14} className="text-blue-500" />
-                  <span>{item.source}</span>
+          <Card key={index}>
+            <CardHeader>
+              <CardTitle className="text-lg">{item.topic}</CardTitle>
+              <CardDescription>{item.description}</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm">{item.summary}</p>
+
+              <Accordion type="single" collapsible className="w-full">
+                <AccordionItem value={`content-${index}`}>
+                  <AccordionTrigger>Read Full News</AccordionTrigger>
+                  <AccordionContent>
+                    <p className="text-sm">{item.content}</p>
+                  </AccordionContent>
+                </AccordionItem>
+              </Accordion>
+
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-xs text-muted-foreground">
+                <div className="flex items-center gap-2 max-w-[70%] sm:max-w-[50%]">
+                  <Globe className="h-3 w-3 flex-shrink-0" />
+                  <span className="truncate">
+                    {item.sources.length > 0
+                      ? cleanSource(item.sources[0])
+                      : 'Unknown source'}
+                  </span>
+                  {item.sources.length > 1 && (
+                    <Badge
+                      variant="secondary"
+                      className="text-xs flex-shrink-0"
+                    >
+                      +{item.sources.length - 1} more
+                    </Badge>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <Clock className="h-3 w-3" />
+                  <span>{new Date(item.publishedAt).toLocaleDateString()}</span>
                 </div>
               </div>
-            </div>
-          </div>
+            </CardContent>
+          </Card>
         ))}
       </div>
 
       {news.length > 0 && (
-        <div className="mt-6 text-center text-gray-500 text-sm">
+        <div className="text-center text-sm text-muted-foreground">
           Showing {filteredNews.length} of {news.length} news items
         </div>
       )}

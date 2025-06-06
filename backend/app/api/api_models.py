@@ -357,6 +357,10 @@ class KnowledgeBaseCreateInput(BaseModel):
     is_default: bool = False
 
 
+class SetDefaultKnowledgeBaseInput(BaseModel):
+    knowledge_base_id: str
+
+
 class KnowledgeBaseOutput(BaseModel):
     id: uuid.UUID
     name: str
@@ -391,6 +395,13 @@ class QueryRequest(BaseModel):
 
 class QueryResponse(BaseModel):
     answer: str
-    sources: List[Dict[str, Any]]  # List of dictionaries
+    sources: List[Dict[str, Any]]
     query: str
     knowledge_base_id: str
+
+
+class NewsBase(BaseModel):
+    heading: str
+    description: str
+    content: str
+    sources: str

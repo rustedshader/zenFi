@@ -6,9 +6,7 @@ import { useAuth } from '@/contexts/auth-context'
 import { toast } from 'sonner'
 import {
   Card,
-  CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle
 } from '@/components/ui/card'
@@ -24,9 +22,24 @@ import {
   DialogTitle,
   DialogTrigger
 } from '@/components/ui/dialog'
+import { Switch } from '@/components/ui/switch'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow
+} from '@/components/ui/table'
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger
+} from '@/components/ui/accordion'
 
 interface Portfolio {
-  id: number
+  id: string
   name: string
   description: string
   gcs_document_link: string | null
@@ -42,8 +55,9 @@ export default function Portfolio() {
   const [newPortfolioDescription, setNewPortfolioDescription] = useState('')
   const [isCreating, setIsCreating] = useState(false)
   const [uploadingPortfolioId, setUploadingPortfolioId] = useState<
-    number | null
+    string | null
   >(null)
+  const [viewMode, setViewMode] = useState<'card' | 'table'>('card')
 
   useEffect(() => {
     if (!isAuthLoading && !isLoggedIn) {
@@ -51,22 +65,24 @@ export default function Portfolio() {
     }
   }, [router, isLoggedIn, isAuthLoading])
 
+  const fetchPortfolios = async () => {
+    setIsLoading(true)
+    try {
+      const response = await fetch('/api/portfolio')
+      if (!response.ok) throw new Error('Failed to fetch portfolios')
+      const data = await response.json()
+      console.log('Fetched Portfolios:', data)
+      setPortfolios(data)
+    } catch (error) {
+      console.error(error)
+      toast.error('Failed to load portfolios')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   useEffect(() => {
     if (isLoggedIn) {
-      const fetchPortfolios = async () => {
-        setIsLoading(true)
-        try {
-          const response = await fetch('/api/portfolio')
-          if (!response.ok) throw new Error('Failed to fetch portfolios')
-          const data = await response.json()
-          setPortfolios(data)
-        } catch (error) {
-          console.error(error)
-          toast.error('Failed to load portfolios')
-        } finally {
-          setIsLoading(false)
-        }
-      }
       fetchPortfolios()
     }
   }, [isLoggedIn])
@@ -87,12 +103,22 @@ export default function Portfolio() {
         })
       })
       if (!response.ok) throw new Error('Failed to create portfolio')
-      const newPortfolio = await response.json()
+      const result = await response.json()
+      console.log('API Response:', result)
+
+      const newPortfolio: Portfolio = {
+        id: result.portfolio_id,
+        name: newPortfolioName,
+        description: newPortfolioDescription,
+        gcs_document_link: null
+      }
+
       setPortfolios([...portfolios, newPortfolio])
       setIsCreateDialogOpen(false)
       setNewPortfolioName('')
       setNewPortfolioDescription('')
       toast.success('Portfolio created successfully')
+      await fetchPortfolios()
     } catch (error) {
       console.error(error)
       toast.error('Failed to create portfolio')
@@ -101,31 +127,7 @@ export default function Portfolio() {
     }
   }
 
-  const handleUpload = async (portfolioId: number, file: File) => {
-    if (!file) return
-    setUploadingPortfolioId(portfolioId)
-    try {
-      const formData = new FormData()
-      formData.append('file', file)
-      const response = await fetch(`/api/portfolio/${portfolioId}/upload_pdf`, {
-        method: 'POST',
-        body: formData
-      })
-      if (!response.ok) throw new Error('Failed to upload PDF')
-      const updatedPortfolios = await fetch('/api/portfolio').then(res =>
-        res.json()
-      )
-      setPortfolios(updatedPortfolios)
-      toast.success('PDF uploaded successfully')
-    } catch (error) {
-      console.error(error)
-      toast.error('Failed to upload PDF')
-    } finally {
-      setUploadingPortfolioId(null)
-    }
-  }
-
-  const handlePortfolioClick = (portfolioId: number) => {
+  const handlePortfolioClick = (portfolioId: string) => {
     router.push(`/portfolio/${portfolioId}`)
   }
 
@@ -141,62 +143,87 @@ export default function Portfolio() {
   return (
     <div className="flex min-h-screen flex-col p-8">
       <div className="max-w-7xl mx-auto w-full space-y-8">
+        <Accordion type="single" collapsible className="mb-6">
+          <AccordionItem value="item-1">
+            <AccordionTrigger>About Portfolios</AccordionTrigger>
+            <AccordionContent>
+              Portfolios allow you to organize and manage your financial data,
+              such as assets, investments, and documents. Create a portfolio to
+              group related financial information, upload relevant documents,
+              and track your financial activities. You can access and analyze
+              your portfolio data through our platform's features.
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
+
         <div className="flex justify-between items-center">
           <h1 className="text-3xl font-bold">Your Portfolios</h1>
-          <Dialog
-            open={isCreateDialogOpen}
-            onOpenChange={setIsCreateDialogOpen}
-          >
-            <DialogTrigger asChild>
-              <Button>Create New Portfolio</Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Create New Portfolio</DialogTitle>
-                <DialogDescription>
-                  Enter the details for your new portfolio.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="name">Name</Label>
-                  <Input
-                    id="name"
-                    value={newPortfolioName}
-                    onChange={e => setNewPortfolioName(e.target.value)}
-                    placeholder="Portfolio Name"
-                  />
+          <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-2">
+              <Label htmlFor="view-toggle">Table View</Label>
+              <Switch
+                id="view-toggle"
+                checked={viewMode === 'table'}
+                onCheckedChange={() =>
+                  setViewMode(viewMode === 'card' ? 'table' : 'card')
+                }
+              />
+            </div>
+            <Dialog
+              open={isCreateDialogOpen}
+              onOpenChange={setIsCreateDialogOpen}
+            >
+              <DialogTrigger asChild>
+                <Button>Create New Portfolio</Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Create New Portfolio</DialogTitle>
+                  <DialogDescription>
+                    Enter the details for your new portfolio.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="name">Name</Label>
+                    <Input
+                      id="name"
+                      value={newPortfolioName}
+                      onChange={e => setNewPortfolioName(e.target.value)}
+                      placeholder="Portfolio Name"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="description">Description</Label>
+                    <Input
+                      id="description"
+                      value={newPortfolioDescription}
+                      onChange={e => setNewPortfolioDescription(e.target.value)}
+                      placeholder="Portfolio Description"
+                    />
+                  </div>
                 </div>
-                <div>
-                  <Label htmlFor="description">Description</Label>
-                  <Input
-                    id="description"
-                    value={newPortfolioDescription}
-                    onChange={e => setNewPortfolioDescription(e.target.value)}
-                    placeholder="Portfolio Description"
-                  />
-                </div>
-              </div>
-              <DialogFooter>
-                <Button
-                  variant="outline"
-                  onClick={() => setIsCreateDialogOpen(false)}
-                >
-                  Cancel
-                </Button>
-                <Button onClick={handleCreatePortfolio} disabled={isCreating}>
-                  {isCreating ? 'Creating...' : 'Create'}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+                <DialogFooter>
+                  <Button
+                    variant="outline"
+                    onClick={() => setIsCreateDialogOpen(false)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button onClick={handleCreatePortfolio} disabled={isCreating}>
+                    {isCreating ? 'Creating...' : 'Create'}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </div>
         </div>
 
         {portfolios.length === 0 ? (
           <div className="text-center text-gray-500 py-12">
             You have no portfolios yet. Create one to get started!
           </div>
-        ) : (
+        ) : viewMode === 'card' ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {portfolios.map(portfolio => (
               <Card
@@ -208,38 +235,43 @@ export default function Portfolio() {
                   <CardTitle>{portfolio.name}</CardTitle>
                   <CardDescription>{portfolio.description}</CardDescription>
                 </CardHeader>
-                <CardContent>
-                  <p>
-                    PDF:{' '}
-                    {portfolio.gcs_document_link ? 'Uploaded' : 'Not uploaded'}
-                  </p>
-                </CardContent>
-                <CardFooter>
-                  <Button
-                    onClick={e => {
-                      e.stopPropagation() // Prevent card click
-                      document.getElementById(`upload-${portfolio.id}`)?.click()
-                    }}
-                    disabled={uploadingPortfolioId === portfolio.id}
-                  >
-                    {uploadingPortfolioId === portfolio.id
-                      ? 'Uploading...'
-                      : 'Upload PDF'}
-                  </Button>
-                  <input
-                    id={`upload-${portfolio.id}`}
-                    type="file"
-                    accept="application/pdf"
-                    style={{ display: 'none' }}
-                    onChange={e => {
-                      const file = e.target.files?.[0]
-                      if (file) handleUpload(portfolio.id, file)
-                    }}
-                  />
-                </CardFooter>
               </Card>
             ))}
           </div>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Description</TableHead>
+                <TableHead>Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {portfolios.map(portfolio => (
+                <TableRow
+                  key={portfolio.id}
+                  className="cursor-pointer"
+                  onClick={() => handlePortfolioClick(portfolio.id)}
+                >
+                  <TableCell>{portfolio.name}</TableCell>
+                  <TableCell>{portfolio.description}</TableCell>
+                  <TableCell>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={e => {
+                        e.stopPropagation()
+                        handlePortfolioClick(portfolio.id)
+                      }}
+                    >
+                      View
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
         )}
       </div>
     </div>

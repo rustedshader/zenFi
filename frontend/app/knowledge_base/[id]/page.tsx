@@ -1,12 +1,22 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { toast } from 'sonner'
+
+interface KnowledgeBaseInfoProps {
+  id: string
+  name: string
+  description: string
+  meta_data: string
+  table_id: string
+  is_default: boolean
+  created_at: string
+}
 
 export default function KnowledgeBasePage() {
   const { id } = useParams<{ id: string }>()
@@ -15,6 +25,24 @@ export default function KnowledgeBasePage() {
   const [file, setFile] = useState<File | null>(null)
   const [url, setUrl] = useState<string>('')
   const [isUploading, setIsUploading] = useState(false)
+  const [isSettingDefault, setIsSettingDefault] = useState(false)
+  const [knowledgeBaseInfo, setKnowledgeBaseInfo] =
+    useState<KnowledgeBaseInfoProps>({
+      id: '',
+      name: '',
+      description: '',
+      meta_data: '',
+      table_id: '',
+      is_default: false,
+      created_at: ''
+    })
+
+  // Fetch knowledge base info when component mounts
+  useEffect(() => {
+    if (id) {
+      getKnowledgeBaseInfo()
+    }
+  }, [id])
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0]
@@ -37,6 +65,70 @@ export default function KnowledgeBasePage() {
     setUrl(inputUrl)
     if (inputUrl) {
       setFile(null) // Clear file when URL is entered
+    }
+  }
+
+  const getKnowledgeBaseInfo = async () => {
+    try {
+      const response = await fetch('/api/knowledge_base/info', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ knowledge_base_id: id })
+      })
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Failed To Get Knowledge Info')
+      }
+      const data = await response.json()
+      setKnowledgeBaseInfo(data)
+    } catch (error) {
+      toast(
+        <div>
+          <strong className="text-red-600">Error</strong>
+          <div>
+            {error instanceof Error
+              ? error.message
+              : 'Failed to fetch knowledge base info.'}
+          </div>
+        </div>
+      )
+    }
+  }
+
+  const handleSetDefault = async () => {
+    setIsSettingDefault(true)
+    try {
+      const response = await fetch('/api/knowledge_base/set_default', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ knowledge_base_id: id })
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to set default')
+      }
+
+      const data = await response.json()
+      setKnowledgeBaseInfo(prev => ({ ...prev, is_default: true }))
+      toast('Success!', {
+        description: 'Knowledge base set as default'
+      })
+    } catch (error) {
+      toast(
+        <div>
+          <strong className="text-red-600">Error</strong>
+          <div>
+            {error instanceof Error ? error.message : 'Failed to set default.'}
+          </div>
+        </div>
+      )
+    } finally {
+      setIsSettingDefault(false)
     }
   }
 
@@ -100,19 +192,25 @@ export default function KnowledgeBasePage() {
   return (
     <div className="container mx-auto py-8">
       <Card className="max-w-lg mx-auto">
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>Upload to Knowledge Base</CardTitle>
+          <Button
+            variant="outline"
+            onClick={handleSetDefault}
+            disabled={isSettingDefault || knowledgeBaseInfo.is_default}
+          >
+            {isSettingDefault
+              ? 'Setting...'
+              : knowledgeBaseInfo.is_default
+                ? 'Default'
+                : 'Set as Default'}
+          </Button>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="knowledge_base_id">Knowledge Base ID</Label>
-              <Input
-                id="knowledge_base_id"
-                value={id}
-                disabled
-                className="bg-gray-100"
-              />
+              <Input id="knowledge_base_id" value={id} disabled className="" />
             </div>
             <div className="space-y-2">
               <Label htmlFor="chunk_size">Chunk Size (optional)</Label>

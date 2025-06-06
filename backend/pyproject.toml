@@ -44,3 +44,6 @@ dependencies = [
     "yfinance>=0.2.61",
     "youtube-search>=2.1.2",
 ]
+[tool.pyright]
+venvPath = "."
+venv = ".venv"

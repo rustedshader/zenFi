@@ -24,6 +24,7 @@ from google.cloud import storage
 from sqlalchemy.orm import selectinload
 
 from app.chat_provider.extra_functions.exchange import get_exchange_rate
+from app.config.config import redis_url
 
 
 portfolio_router = APIRouter(prefix="/portfolio")
@@ -49,43 +50,6 @@ async def create_portfolio(
         "message": "Portfolio created successfully",
         "portfolio_id": new_portfolio.id,
     }
-
-
-@portfolio_router.post("/{portfolio_id}/upload_pdf")
-async def upload_pdf(
-    portfolio_id: int,
-    file: UploadFile = File(...),
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    """Upload a PDF to an existing portfolio and store it in GCP bucket."""
-    stmt = select(Portfolio).where(
-        Portfolio.id == portfolio_id, Portfolio.user_id == current_user.id
-    )
-    result = await db.execute(stmt)
-    portfolio = result.scalars().first()
-    if not portfolio:
-        raise HTTPException(
-            status_code=404, detail="Portfolio not found or not authorized"
-        )
-
-    try:
-        client = storage.Client()
-        bucket = client.bucket("portfolios_bucket")
-        if file.filename and "." in file.filename:
-            file_extension = file.filename.split(".")[-1]
-        else:
-            file_extension = "pdf"
-        blob_name = f"user_{current_user.id}/portfolio_{portfolio_id}/{uuid.uuid4()}.{file_extension}"
-        blob = bucket.blob(blob_name)
-        blob.upload_from_file(file.file, content_type=file.content_type)
-        gcs_url = f"https://storage.googleapis.com/portfolios_bucket/{blob_name}"
-
-        setattr(portfolio, "gcs_document_link", gcs_url)
-        await db.commit()
-        return {"message": "PDF uploaded successfully", "gcs_document_link": gcs_url}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to upload PDF: {str(e)}")
 
 
 @portfolio_router.post("/{portfolio_id}/assets")
@@ -141,6 +105,16 @@ async def get_portfolio(
     total_gain_base = 0.0
     assets_details = []
 
+    if len(portfolio.assets) == 0:
+        return {
+            "id": portfolio.id,
+            "name": portfolio.name,
+            "total_value_inr": 0,
+            "total_day_gain_inr": 0,
+            "assets": [],
+            "ai_summary": "",
+        }
+
     for asset in portfolio.assets:
         asset: Asset = asset
         asset_detail = {
@@ -161,7 +135,7 @@ async def get_portfolio(
             asset_identifier: str = getattr(asset, "identifier", "")
             asset_quantity: float = getattr(asset, "quantity", 0)
             asset_purchase_price: float = getattr(asset, "purchase_price", 0)
-            stock_fastinfo = get_stock_fastinfo(asset_identifier)
+            stock_fastinfo = await get_stock_fastinfo(asset_identifier)
 
             # news_data = fetch_finance_news(asset_identifier)
             news_data = []

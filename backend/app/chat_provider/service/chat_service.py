@@ -57,9 +57,9 @@ from app.chat_provider.models.chat_models import AppState
 from app.chat_provider.tools.rag_tools import (
     get_db,
     get_user_portfolio_tool,
-    ingested_web_search,
 )
 from app.api.api_models import ChatSession
+from app.chat_provider.tools.knowledge_base import query_knowledge_base
 
 
 class ChatService:
@@ -105,15 +105,65 @@ class ChatService:
             get_current_datetime,
             youtube_search_tool,
             get_user_portfolio_tool,
-            ingested_web_search,
+            query_knowledge_base,
         ]
         self.tool_node = ToolNode(self.tools)
         self.system_prompt_message = SystemMessage(
             content=SYSTEM_INSTRUCTIONS
             + "\n\nYou will be provided with search results related to the user's query. Use this information to provide accurate and up-to-date responses. Additionally, if you think a YouTube video would be helpful for the user's query, use the YouTubeSearchTool to find a relevant video and include the link in your response."
-            + "\n\nAdditionally, you have access to ingested web documents on specific topics. Use the 'ingested_web_search' tool with the appropriate context when the user's query relates to these topics. Available contexts include: 'langsmith_pricing', 'cloud_workstations', 'bigframes', 'dataplex'."
         )
         self.bound_llm = self.model.bind_tools(self.tools)
+
+    async def check_knowledge_base_query(self, state: AppState):
+        """
+        Use LLM to determine if the knowledge base (storing user financial data) is needed for the user's query.
+        """
+        last_message = state["messages"][-1]
+        if isinstance(last_message, HumanMessage):
+            user_input = last_message.content
+
+            # Create a prompt to determine if knowledge base is needed
+            knowledge_base_decision_prompt = f"""
+                        Analyze the user query to determine if it requires accessing their personal knowledge base, which contains their transaction history, portfolio, and financial notes.
+
+                        User Query: "{user_input}"
+
+                        Guidelines:
+                        1. If the query uses personal pronouns like "my" or "I" in a financial context (e.g., "my portfolio," "my transactions," "what did I spend on"), the knowledge base IS needed.
+                        2. If the query asks for analysis or uses superlatives about the user's finances (e.g., "what is my largest transaction," "my most recent stock purchase," "my top spending category"), the knowledge base IS needed.
+                        3. If the query is about general financial topics, stock market data (e.g., "price of AAPL"), or news, the knowledge base is NOT needed.
+
+                        Examples of queries that NEED the knowledge base:
+                        - "hi can you query my knowledge base about my most spent transaction"
+                        - "what is my largest transaction"
+                        - "show me my recent purchases"
+                        - "How much did I invest in tech stocks?"
+
+                        Examples of queries that DO NOT NEED the knowledge base:
+                        - "What is the market cap of Microsoft?"
+                        - "Tell me the latest finance news."
+                        - "Explain what a P/E ratio is."
+
+                        Respond with ONLY "YES" if the knowledge base is needed, or "NO" if it's not.
+                        """
+
+            response = await self.model.ainvoke(
+                [
+                    SystemMessage(
+                        content="You are an expert at determining information requirements."
+                    ),
+                    HumanMessage(content=knowledge_base_decision_prompt),
+                ]
+            )
+
+            needs_knowledge_base = response.content.strip().upper() == "YES"
+            print(
+                f"DEBUG [check_knowledge_base_query]: Query: '{user_input}', Needs knowledge base: {needs_knowledge_base}"
+            )
+
+            return {"needs_knowledge_base": needs_knowledge_base}
+
+        return {"needs_knowledge_base": False}
 
     # TODO: Can Use Pydantic model here to get structured output for the llm
     async def determine_search_need(self, state: AppState):
@@ -198,7 +248,7 @@ class ChatService:
         )
         return {"messages": [search_message]}
 
-    async def evaluate_search_results(self, state: MessagesState):
+    async def evaluate_search_results(self, state: AppState):
         messages = state["messages"]
         last_message = messages[-1]
         if (
@@ -251,6 +301,19 @@ class ChatService:
                 )
             llm_messages.append(portfolio_system_message)
 
+        if state.get("needs_knowledge_base"):
+            if current_user_id:
+                knowledge_base_system_message = SystemMessage(
+                    content=f"The user's query requires accessing their personal financial data. You MUST use the 'query_knowledge_base' tool to answer this question. "
+                    f"Use the user's original query as the 'query' parameter for the tool. The user's ID is '{current_user_id}'."
+                )
+            else:
+                knowledge_base_system_message = SystemMessage(
+                    content="The user is asking a question that requires their knowledge base, but their user ID is missing. "
+                    "You must ask the user for their user ID before you can proceed."
+                )
+            llm_messages.append(knowledge_base_system_message)
+
         response = await self.bound_llm.ainvoke(llm_messages)
         print("Model response:", response)
         return {"messages": [response]}
@@ -265,12 +328,13 @@ class ChatService:
 
     def route_after_search_decision(self, state: AppState):
         """
-        Route based on whether web search is needed and portfolio check.
+        Route based on whether web search, portfolio, or knowledge base check is needed.
         """
         needs_search = state.get("needs_web_search", False)
         needs_portfolio = state.get("needs_portfolio", False)
+        needs_knowledge_base = state.get("needs_knowledge_base", False)
 
-        if needs_portfolio:
+        if needs_portfolio or needs_knowledge_base:
             return "call_model"
         elif needs_search:
             return "generate_multiple_queries"
@@ -319,6 +383,7 @@ class ChatService:
 
         # Add all nodes
         builder.add_node("check_portfolio_query", self.check_portfolio_query)
+        builder.add_node("check_knowledge_base_query", self.check_knowledge_base_query)
         builder.add_node("determine_search_need", self.determine_search_need)
         builder.add_node("generate_multiple_queries", self.generate_multiple_queries)
         builder.add_node("perform_multiple_searches", self.perform_multiple_searches)
@@ -329,7 +394,8 @@ class ChatService:
 
         # Build the flow
         builder.add_edge(START, "check_portfolio_query")
-        builder.add_edge("check_portfolio_query", "determine_search_need")
+        builder.add_edge("check_portfolio_query", "check_knowledge_base_query")
+        builder.add_edge("check_knowledge_base_query", "determine_search_need")
 
         # Route after determining search need
         builder.add_conditional_edges(

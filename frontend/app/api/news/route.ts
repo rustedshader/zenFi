@@ -11,7 +11,7 @@ export async function GET(req: Request) {
     }
 
     const response = await fetch(
-      `${process.env.NEXT_PUBLIC_BACKEND_API_URL}/finance/news`,
+      `${process.env.NEXT_PUBLIC_BACKEND_API_URL}/news`,
       {
         method: 'GET',
         headers: {
@@ -30,10 +30,8 @@ export async function GET(req: Request) {
       )
     }
 
-    // Parse the backend JSON response.
     const data = await response.json()
 
-    // Return the JSON data to the client.
     return NextResponse.json(data)
   } catch (error) {
     console.error('API route error:', error)

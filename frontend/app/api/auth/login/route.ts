@@ -29,7 +29,7 @@ export async function POST(req: Request) {
   cookieStore.set('jwt_token', data.access_token, {
     httpOnly: false,
     secure: true,
-    maxAge: 3600
+    maxAge: 7200
   })
   return NextResponse.json({ message: 'Login successful' })
 }

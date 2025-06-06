@@ -1,9 +1,6 @@
-import os
 import sys
 from typing import Any, Dict, List, Optional, Tuple
-
 from langchain_google_community import BigQueryVectorSearch
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_google_vertexai import VertexAIEmbeddings
 import json
 from google.cloud import bigquery
@@ -12,9 +9,7 @@ from langchain_community.vectorstores import (
     bigquery_vector_search as bigquery_vector_search_module,
 )
 from langchain_core.documents import Document
-from dotenv import load_dotenv
-
-load_dotenv()
+from app.config.config import project_id
 
 
 class BigQueryVectorSearchLocal(BigQueryVectorSearch):
@@ -122,11 +117,6 @@ class Properties:
         self.region = region
         self.dataset = dataset
         self.table = table
-
-
-GEMINI_API_KEY = os.environ.get("GOOGLE_GEMINI_API_KEY", "")
-GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY")
-project_id = os.environ.get("PROJECT_ID")
 
 
 class EnhancedVectorStoreFactory:
