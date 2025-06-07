@@ -243,6 +243,7 @@ dependencies = [
     { name = "langchain-experimental" },
     { name = "langchain-google-community" },
     { name = "langchain-google-genai" },
+    { name = "langchain-sandbox" },
     { name = "langgraph" },
     { name = "langgraph-checkpoint-postgres" },
     { name = "linkup-sdk" },
@@ -285,6 +286,7 @@ requires-dist = [
     { name = "langchain-experimental", specifier = ">=0.3.4" },
     { name = "langchain-google-community", specifier = ">=2.0.7" },
     { name = "langchain-google-genai", specifier = ">=2.1.4" },
+    { name = "langchain-sandbox", specifier = ">=0.0.6" },
     { name = "langgraph", specifier = ">=0.4.5" },
     { name = "langgraph-checkpoint-postgres", specifier = ">=2.0.21" },
     { name = "linkup-sdk", specifier = ">=0.2.6" },
@@ -2051,6 +2053,19 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/81/48/73cb0a186f028a3597a825c930957a032895960381af505fa93805fe1736/langchain_google_genai-2.1.4.tar.gz", hash = "sha256:b52e10ea3daf1a65f70b73c78b78235466593de2aa9f4119fa887b804605efb7", size = 40368, upload-time = "2025-04-30T08:29:45.879Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/07/12/2be71bebbc23e4a499c50df567017110e4d382a045422647c8e6b1040541/langchain_google_genai-2.1.4-py3-none-any.whl", hash = "sha256:a3fa3cf7fe9c1de77280f42fbdd22cfcc5fbeb0d60cd5be7a0e6c50a74f5ce73", size = 44313, upload-time = "2025-04-30T08:29:44.864Z" },
+]
+
+[[package]]
+name = "langchain-sandbox"
+version = "0.0.6"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "langchain-core" },
+    { name = "langgraph" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/10/a0/0b654bccd20ef20aeb9365e52223f96732899012776f0decb879523cd7d4/langchain_sandbox-0.0.6.tar.gz", hash = "sha256:e5b0f819e96ea394d66fdcb8508180bf8ba146404ae9a043535ab1a70d004396", size = 80017, upload-time = "2025-05-21T02:42:39.166Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/be/e4/503a0939e777ee1cef207d0d32e6b66660447f81bd4f9c7dfb00b5538325/langchain_sandbox-0.0.6-py3-none-any.whl", hash = "sha256:793fb7ca8eca2e075d49912085dad5453a083789bb8fdb682290f49db36ba2ba", size = 9865, upload-time = "2025-05-21T02:42:37.99Z" },
 ]
 
 [[package]]

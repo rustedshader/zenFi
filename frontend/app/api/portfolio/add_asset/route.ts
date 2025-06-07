@@ -1,12 +1,16 @@
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 
-export async function POST(
-  req: Request,
-  { params }: { params: { portfolio_id: string } }
-) {
+export async function POST(req: Request) {
   try {
-    const portfolio_id = await params.portfolio_id
+    const {
+      portfolio_id,
+      asset_type,
+      identifier,
+      quantity,
+      purchase_price,
+      purchase_date
+    } = await req.json()
     const cookieStore = await cookies()
     const token = cookieStore.get('jwt_token')?.value
 
@@ -14,30 +18,28 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const formData = await req.formData()
-
-    if (!formData.has('file')) {
-      return NextResponse.json({ error: 'No file provided' }, { status: 400 })
-    }
-
     const response = await fetch(
-      `${process.env.NEXT_PUBLIC_BACKEND_API_URL}/portfolio/${portfolio_id}/upload_pdf`,
+      `${process.env.NEXT_PUBLIC_BACKEND_API_URL}/portfolio/${portfolio_id}/assets`,
       {
         method: 'POST',
         headers: {
+          'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`
         },
-        body: formData
+        body: JSON.stringify({
+          asset_type,
+          identifier,
+          quantity,
+          purchase_price,
+          purchase_date
+        })
       }
     )
 
     if (!response.ok) {
       const errorText = await response.text()
       console.error('Backend error:', response.status, errorText)
-      return NextResponse.json(
-        { error: errorText },
-        { status: response.status }
-      )
+      throw new Error('Network response was not ok')
     }
 
     const data = await response.json()

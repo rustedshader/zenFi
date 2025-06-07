@@ -341,6 +341,7 @@ export default function PortfolioDetails() {
     }
 
     const assetData = {
+      portfolio_id: portfolioId,
       asset_type: newAsset.asset_type,
       identifier: newAsset.identifier,
       quantity: parseFloat(newAsset.quantity),
@@ -350,15 +351,23 @@ export default function PortfolioDetails() {
     }
 
     try {
-      const response = await fetch(`/api/portfolio/${portfolioId}/assets`, {
+      const response = await fetch(`/api/portfolio/add_asset`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(assetData)
       })
       if (!response.ok) throw new Error('Failed to add asset')
-      const updatedPortfolio = await fetch(
-        `/api/portfolio/${portfolioId}`
-      ).then(res => res.json())
+
+      // Fetch updated portfolio with portfolio_id
+      const updatedPortfolioResponse = await fetch(`/api/portfolio/info`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ portfolio_id: portfolioId })
+      })
+      if (!updatedPortfolioResponse.ok)
+        throw new Error('Failed to fetch updated portfolio')
+      const updatedPortfolio = await updatedPortfolioResponse.json()
+
       setPortfolio(updatedPortfolio)
       setIsAddAssetOpen(false)
       setNewAsset({
@@ -386,9 +395,17 @@ export default function PortfolioDetails() {
         }
       )
       if (!response.ok) throw new Error('Failed to delete asset')
-      const updatedPortfolio = await fetch(
-        `/api/portfolio/${portfolioId}`
-      ).then(res => res.json())
+
+      // Fetch updated portfolio with portfolio_id
+      const updatedPortfolioResponse = await fetch(`/api/portfolio/info`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ portfolio_id: portfolioId })
+      })
+      if (!updatedPortfolioResponse.ok)
+        throw new Error('Failed to fetch updated portfolio')
+      const updatedPortfolio = await updatedPortfolioResponse.json()
+
       setPortfolio(updatedPortfolio)
       setAssetToDelete(null)
       toast.success('Asset deleted successfully')

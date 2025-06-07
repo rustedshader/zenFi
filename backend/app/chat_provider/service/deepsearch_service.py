@@ -56,7 +56,11 @@ from app.chat_provider.tools.news_tools import (
     yahoo_finance_news_tool,
     duckduckgo_news_search_tool,
 )
-from app.chat_provider.tools.basic_tools import get_current_datetime
+from app.chat_provider.tools.basic_tools import (
+    get_current_datetime,
+    youtube_search_tool,
+    python_sandbox_tool,
+)
 from app.chat_provider.models.chat_models import (
     Feedback,
     Queries,
@@ -131,35 +135,93 @@ class DeepSearchChatService:
             yahoo_finance_news_tool,
             duckduckgo_news_search_tool,
             get_current_datetime,
+            youtube_search_tool,
+            python_sandbox_tool,
         ]
         # Tool Node
         self.tool_node = ToolNode(self.tools)
-        # Set the system prompt
         # Bind tools to the model
         self.bound_llm = self.model.bind_tools(self.tools)
 
-    # async def call_model(self, state: MessagesState):
-    #     messages =  state["messages"]
-    #     response = await self.bound_llm.ainvoke(messages)
-    #     return {"messages": response}
+    async def call_model(self, state: MessagesState):
+        """Call the model with tools and handle tool calls."""
+        messages = state.get("messages", [])
+        if not messages:
+            return {"messages": []}
+
+        try:
+            response = await self.bound_llm.ainvoke(messages)
+            # Ensure response is added to existing messages
+            updated_messages = messages + [response]
+            return {"messages": updated_messages}
+        except Exception as e:
+            # Return error message as AIMessage
+            error_response = AIMessage(content=f"Error calling model: {str(e)}")
+            updated_messages = messages + [error_response]
+            return {"messages": updated_messages}
+
+    async def gather_data_with_tools(self, state: SectionState, config: RunnableConfig):
+        """Use tools to gather additional data for the section."""
+        topic = state["topic"]
+        section = state["section"]
+
+        try:
+            # Create a prompt that encourages tool usage
+            tool_gathering_prompt = f"""
+            You are researching the topic: {topic}
+            Specifically focusing on: {section.name} - {section.description}
+            
+            Use the available tools to gather relevant data. For financial topics, use stock tools.
+            For current information, use search and news tools.
+            
+            Please gather comprehensive data using the appropriate tools.
+            """
+
+            # Create a messages state for tool calling
+            messages = [
+                SystemMessage(content=tool_gathering_prompt),
+                HumanMessage(content=f"Gather data for: {section.description}"),
+            ]
+
+            # Use a simple messages-based approach for tool calling
+            tool_state = {"messages": messages}
+
+            # Call model which may trigger tools
+            response = await self.call_model(tool_state)
+            updated_messages = response.get("messages", [])
+
+            # Check if tools were called in the latest response
+            if updated_messages and isinstance(updated_messages[-1], AIMessage):
+                last_msg = updated_messages[-1]
+                if hasattr(last_msg, "tool_calls") and last_msg.tool_calls:
+                    # Execute tools
+                    tool_state["messages"] = updated_messages
+                    tool_response = await self.tool_node.ainvoke(tool_state)
+
+                    # Get the tool results
+                    tool_messages = tool_response.get("messages", [])
+
+                    # Create a summary of tool results
+                    tool_results = []
+                    for msg in tool_messages:
+                        if hasattr(msg, "content") and msg.content:
+                            tool_name = getattr(msg, "name", "Unknown Tool")
+                            tool_results.append(
+                                f"Tool: {tool_name}\nResult: {msg.content}"
+                            )
+
+                    tool_summary = "\n\n".join(tool_results) if tool_results else ""
+                    return {"tool_data": tool_summary}
+
+            return {"tool_data": ""}
+
+        except Exception as e:
+            # Return empty tool data on error, but log the error
+            print(f"Error in gather_data_with_tools: {str(e)}")
+            return {"tool_data": ""}
 
     async def generate_report_plan(self, state: ReportState, config: RunnableConfig):
-        """Generate the initial report plan with sections.
-
-        This node:
-        1. Gets configuration for the report structure and search parameters
-        2. Generates search queries to gather context for planning
-        3. Performs web searches using those queries
-        4. Uses an LLM to generate a structured plan with sections
-
-        Args:
-            state: Current graph state containing the report topic
-            config: Configuration for models, search APIs, etc.
-
-        Returns:
-            Dict containing the generated sections
-        """
-
+        """Generate the initial report plan with sections."""
         # Inputs
         topic = state["topic"]
 
@@ -174,12 +236,8 @@ class DeepSearchChatService:
         report_structure = DEFAULT_REPORT_STRUCTURE
         number_of_queries = 5
         search_api = get_config_value(configurable.search_api)
-        search_api_config = (
-            configurable.search_api_config or {}
-        )  # Get the config dict, default to empty
-        params_to_pass = get_search_params(
-            search_api, search_api_config
-        )  # Filter parameters
+        search_api_config = configurable.search_api_config or {}
+        params_to_pass = get_search_params(search_api, search_api_config)
 
         # Convert JSON object to string if necessary
         if isinstance(report_structure, dict):
@@ -215,7 +273,6 @@ class DeepSearchChatService:
         ]
 
         # Search the web with parameters
-        # TODO: Complete This
         source_str = await select_and_execute_search(
             search_api, query_list, params_to_pass
         )
@@ -266,29 +323,19 @@ class DeepSearchChatService:
         return {"search_queries": queries.queries}
 
     def should_continue(self, state: MessagesState):
-        messages = state["messages"]
+        """Determine whether to continue with tool calls or end."""
+        messages = state.get("messages", [])
+        if not messages:
+            return END
+
         last_message = messages[-1]
-        if isinstance(last_message, AIMessage):
+        if isinstance(last_message, AIMessage) and hasattr(last_message, "tool_calls"):
             if last_message.tool_calls:
                 return "tools"
-        else:
-            print("Error: Last Message Instance is not AIMessage")
         return END
 
     async def generate_queries(self, state: SectionState, config: RunnableConfig):
-        """Generate search queries for researching a specific section.
-
-        This node uses an LLM to generate targeted search queries based on the
-        section topic and description.
-
-        Args:
-            state: Current state containing section details
-            config: Configuration including number of queries to generate
-
-        Returns:
-            Dict containing the generated search queries
-        """
-
+        """Generate search queries for researching a specific section."""
         # Get state
         topic = state["topic"]
         section = state["section"]
@@ -316,21 +363,7 @@ class DeepSearchChatService:
             return {"search_queries": queries.queries}
 
     async def search_web(self, state: SectionState, config: RunnableConfig):
-        """Execute web searches for the section queries.
-
-        This node:
-        1. Takes the generated queries
-        2. Executes searches using configured search API
-        3. Formats results into usable context
-
-        Args:
-            state: Current state with search queries
-            config: Search API configuration
-
-        Returns:
-            Dict with search results and updated iteration count
-        """
-
+        """Execute web searches for the section queries."""
         search_queries = state["search_queries"]
 
         configurable = Configuration.from_runnable_config(config)
@@ -357,13 +390,21 @@ class DeepSearchChatService:
         topic = state["topic"]
         section = state["section"]
         source_str = state["source_str"]
+        tool_data = state.get("tool_data", "")
         configurable = Configuration.from_runnable_config(config)
+
+        # Enhanced section writing with tool data
+        enhanced_context = (
+            f"{source_str}\n\nAdditional Tool Data:\n{tool_data}"
+            if tool_data
+            else source_str
+        )
 
         section_writer_inputs_formatted = section_writer_inputs.format(
             topic=topic,
             section_name=section.name,
             section_topic=section.description,
-            context=source_str,
+            context=enhanced_context,
             section_content=section.content,
         )
 
@@ -398,7 +439,7 @@ class DeepSearchChatService:
             feedback.grade == "pass"
             or state["search_iterations"] >= configurable.max_search_depth
         ):
-            return {"completed_sections": [section]}  # Wrap section in a list
+            return {"completed_sections": [section]}
         else:
             return {
                 "search_queries": feedback.follow_up_queries,
@@ -407,19 +448,7 @@ class DeepSearchChatService:
             }
 
     async def write_final_sections(self, state: SectionState, config: RunnableConfig):
-        """Write sections that don't require research using completed sections as context.
-
-        This node handles sections like conclusions or summaries that build on
-        the researched sections rather than requiring direct research.
-
-        Args:
-            state: Current state with completed sections as context
-            config: Configuration for the writing model
-
-        Returns:
-            Dict containing the newly written section
-        """
-
+        """Write sections that don't require research using completed sections as context."""
         # Get state
         topic = state["topic"]
         section = state["section"]
@@ -448,82 +477,8 @@ class DeepSearchChatService:
         # Write the updated section to completed sections
         return {"completed_sections": [section]}
 
-    async def human_feedback(
-        self, state: ReportState, config: RunnableConfig
-    ) -> Command[Literal["generate_report_plan", "build_section_with_web_research"]]:
-        """Get human feedback on the report plan and route to next steps.
-
-        This node:
-        1. Formats the current report plan for human review
-        2. Gets feedback via an interrupt
-        3. Routes to either:
-        - Section writing if plan is approved
-        - Plan regeneration if feedback is provided
-
-        Args:
-            state: Current graph state with sections to review
-            config: Configuration for the workflow
-
-        Returns:
-            Command to either regenerate plan or start section writing
-        """
-
-        # Get sections
-        topic = state["topic"]
-        sections = state["sections"]
-        sections_str = "\n\n".join(
-            f"Section: {section.name}\n"
-            f"Description: {section.description}\n"
-            f"Research needed: {'Yes' if section.research else 'No'}\n"
-            for section in sections
-        )
-
-        # Get feedback on the report plan from interrupt
-        interrupt_message = f"""Please provide feedback on the following report plan. 
-                            \n\n{sections_str}\n
-                            \nDoes the report plan meet your needs?\nPass 'true' to approve the report plan.\nOr, provide feedback to regenerate the report plan:"""
-
-        feedback = interrupt(interrupt_message)
-
-        # If the user approves the report plan, kick off section writing
-        if isinstance(feedback, bool) and feedback is True:
-            # Treat this as approve and kick off section writing
-            return Command(
-                goto=[
-                    Send(
-                        "build_section_with_web_research",
-                        {"topic": topic, "section": s, "search_iterations": 0},
-                    )
-                    for s in sections
-                    if s.research
-                ]
-            )
-
-        # If the user provides feedback, regenerate the report plan
-        elif isinstance(feedback, str):
-            # Treat this as feedback and append it to the existing list
-            return Command(
-                goto="generate_report_plan",
-                update={"feedback_on_report_plan": [feedback]},
-            )
-        else:
-            raise TypeError(
-                f"Interrupt value of type {type(feedback)} is not supported."
-            )
-
     def gather_completed_sections(self, state: ReportState):
-        """Format completed sections as context for writing final sections.
-
-        This node takes all completed research sections and formats them into
-        a single context string for writing summary sections.
-
-        Args:
-            state: Current state with completed sections
-
-        Returns:
-            Dict with formatted sections as context
-        """
-
+        """Format completed sections as context for writing final sections."""
         # List of completed sections
         completed_sections = state["completed_sections"]
 
@@ -533,20 +488,7 @@ class DeepSearchChatService:
         return {"report_sections_from_research": completed_report_sections}
 
     def compile_final_report(self, state: ReportState):
-        """Compile all sections into the final report.
-
-        This node:
-        1. Gets all completed sections
-        2. Orders them according to original plan
-        3. Combines them into the final report
-
-        Args:
-            state: Current state with all completed sections
-
-        Returns:
-            Dict containing the complete report
-        """
-
+        """Compile all sections into the final report."""
         # Get sections
         sections = state["sections"]
         completed_sections = {s.name: s.content for s in state["completed_sections"]}
@@ -561,18 +503,7 @@ class DeepSearchChatService:
         return {"final_report": all_sections}
 
     def initiate_final_section_writing(self, state: ReportState):
-        """Create parallel tasks for writing non-research sections.
-
-        This edge function identifies sections that don't need research and
-        creates parallel writing tasks for each one.
-
-        Args:
-            state: Current state with all sections and research context
-
-        Returns:
-            List of Send commands for parallel section writing
-        """
-
+        """Create parallel tasks for writing non-research sections."""
         # Kick off section writing in parallel via Send() API for any sections that do not require research
         return [
             Send(
@@ -603,6 +534,7 @@ class DeepSearchChatService:
                         "section": s,
                         "search_queries": [],
                         "source_str": "",
+                        "tool_data": "",  # Add tool_data field
                         "search_iterations": 0,
                         "completed_sections": None,
                     },
@@ -613,22 +545,26 @@ class DeepSearchChatService:
         )
 
     def build_graph(self, checkpointer):
-        # https://langchain-ai.github.io/langgraph/how-tos/tool-calling/#use-prebuilt-toolnode
-        # Reference: https://github.com/langchain-ai/open_deep_research/blob/main/src/open_deep_research/graph.py
-
+        # Build section builder with tool integration
         section_builder = StateGraph(SectionState, output=SectionOutputState)
         section_builder.add_node("generate_queries", self.generate_queries)
+        section_builder.add_node("gather_data_with_tools", self.gather_data_with_tools)
         section_builder.add_node("search_web", self.search_web)
         section_builder.add_node("write_section", self.write_section)
+
         section_builder.add_edge(START, "generate_queries")
-        section_builder.add_edge("generate_queries", "search_web")
+        section_builder.add_edge("generate_queries", "gather_data_with_tools")
+        section_builder.add_edge("gather_data_with_tools", "search_web")
         section_builder.add_edge("search_web", "write_section")
         section_builder.add_conditional_edges(
             "write_section",
-            lambda state: END if state.get("completed_sections") else "search_web",
-            {"search_web": "search_web", END: END},
+            lambda state: END
+            if state.get("completed_sections")
+            else "gather_data_with_tools",
+            {"gather_data_with_tools": "gather_data_with_tools", END: END},
         )
 
+        # Main graph
         builder = StateGraph(
             ReportState,
             input=ReportStateInput,
@@ -657,7 +593,7 @@ class DeepSearchChatService:
         return self.graph
 
     async def stream_input(
-        self, user_input: str, thread_id: str, user_id: str, session_id: str
+        self, user_input: str, thread_id: str, user_id: str = "", session_id: str = ""
     ) -> AsyncGenerator[str, None]:
         """Stream the model's response to user input asynchronously."""
         config = RunnableConfig(
@@ -671,36 +607,74 @@ class DeepSearchChatService:
         )
         # Construct a valid ReportState
         input_state = {
-            "topic": user_input,  # Use user_input as the topic
+            "topic": user_input,
             "feedback_on_report_plan": [],
             "sections": [],
             "completed_sections": [],
             "report_sections_from_research": "",
             "final_report": "",
         }
-        async for state_update in self.graph.astream(
-            input_state, config, stream_mode="values"
-        ):
-            # Check if final_report is available in the state
-            if "final_report" in state_update and state_update["final_report"]:
-                yield state_update["final_report"]
-            # Fallback to messages if final_report is not yet available
-            elif "messages" in state_update and state_update["messages"]:
-                last_message = state_update["messages"][-1]
-                if isinstance(last_message, AIMessage):
-                    content = last_message.content
-                    if isinstance(content, list):
-                        content = "\n".join(str(item) for item in content)
-                    yield content
+
+        # Track if we've yielded anything
+        has_yielded = False
+
+        try:
+            async for state_update in self.graph.astream(
+                input_state, config, stream_mode="values"
+            ):
+                # Priority 1: Check if final_report is available
+                if "final_report" in state_update and state_update["final_report"]:
+                    yield state_update["final_report"]
+                    has_yielded = True
+                    break  # Final report is complete, no need to continue
+
+                # Priority 2: Check for sections being completed
+                elif "sections" in state_update and state_update["sections"]:
+                    sections_summary = f"Generated {len(state_update['sections'])} sections for analysis"
+                    yield sections_summary
+                    has_yielded = True
+
+                # Priority 3: Check for completed sections
+                elif (
+                    "completed_sections" in state_update
+                    and state_update["completed_sections"]
+                ):
+                    completed_count = len(state_update["completed_sections"])
+                    yield f"Completed {completed_count} sections"
+                    has_yielded = True
+
+                # Priority 4: Check for progress updates
+                elif (
+                    "report_sections_from_research" in state_update
+                    and state_update["report_sections_from_research"]
+                ):
+                    yield "Gathering research sections..."
+                    has_yielded = True
+
+                # Priority 5: Fallback to messages if they exist and are AI messages
+                elif "messages" in state_update and state_update["messages"]:
+                    messages = state_update["messages"]
+                    if messages and isinstance(messages[-1], AIMessage):
+                        last_message = messages[-1]
+                        content = last_message.content
+                        if isinstance(content, list):
+                            content = "\n".join(str(item) for item in content)
+                        if content and content.strip():  # Only yield non-empty content
+                            yield content
+                            has_yielded = True
+
+        except Exception as e:
+            error_msg = f"Error during report generation: {str(e)}"
+            yield error_msg
+            has_yielded = True
+
+        # Ensure we always yield something
+        if not has_yielded:
+            yield "Report generation started..."
 
 
 if __name__ == "__main__":
     import asyncio
-
-    GEMINI_API_KEY = os.environ.get("GOOGLE_GEMINI_API_KEY", "")
-    model = ChatGoogleGenerativeAI(
-        model="gemini-2.0-flash-lite", api_key=GEMINI_API_KEY
-    )
 
     async def main():
         # Set USER_AGENT to avoid warning

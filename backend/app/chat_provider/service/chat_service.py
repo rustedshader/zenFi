@@ -51,6 +51,7 @@ from app.chat_provider.tools.news_tools import (
 from app.chat_provider.tools.basic_tools import (
     get_current_datetime,
     youtube_search_tool,
+    python_sandbox_tool,
 )
 
 from app.chat_provider.models.chat_models import AppState
@@ -106,6 +107,7 @@ class ChatService:
             youtube_search_tool,
             get_user_portfolio_tool,
             query_knowledge_base,
+            python_sandbox_tool,
         ]
         self.tool_node = ToolNode(self.tools)
         self.system_prompt_message = SystemMessage(
@@ -179,14 +181,6 @@ class ChatService:
             Analyze the following user query and determine if a web search is needed to answer it properly.
 
             User Query: "{user_input}"
-
-            Available tools include:
-            - Stock data tools (prices, market cap, volume, historical data, etc.)
-            - Portfolio tools (user's personal portfolio information)
-            - Finance news tools
-            - Current datetime
-            - YouTube search
-            - Ingested web documents on specific topics
 
             Consider these guidelines:
             1. If the query can be answered using stock data tools (e.g., stock prices, financial metrics), NO web search is needed

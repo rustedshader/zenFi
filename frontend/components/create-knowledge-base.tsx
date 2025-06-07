@@ -29,6 +29,7 @@ import {
   AccordionItem,
   AccordionTrigger
 } from '@/components/ui/accordion'
+import { Eye } from 'lucide-react'
 
 interface KnowledgeBase {
   id: string
@@ -142,7 +143,11 @@ export default function KnowledgeBase() {
     <div className="container mx-auto p-4">
       <Accordion type="single" collapsible className="mb-6">
         <AccordionItem value="item-1">
-          <AccordionTrigger>About Financial Knowledge Base</AccordionTrigger>
+          <AccordionTrigger>
+            <div className="flex gap-3">
+              About Financial Knowledge Base <Eye />
+            </div>
+          </AccordionTrigger>
           <AccordionContent>
             The Financial Knowledge Base allows you to upload and organize your
             financial data, such as transactions, investments, and budgets. Once

@@ -302,7 +302,6 @@ class AssetBase(BaseModel):
     quantity: float
     purchase_price: float
     purchase_date: datetime.date
-    current_price: Optional[float] = None
     notes: Optional[str] = None
 
 

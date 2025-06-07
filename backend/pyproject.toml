@@ -19,6 +19,7 @@ dependencies = [
     "langchain-experimental>=0.3.4",
     "langchain-google-community>=2.0.7",
     "langchain-google-genai>=2.1.4",
+    "langchain-sandbox>=0.0.6",
     "langgraph>=0.4.5",
     "langgraph-checkpoint-postgres>=2.0.21",
     "linkup-sdk>=0.2.6",

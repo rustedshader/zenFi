@@ -12,7 +12,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger
 } from './ui/dropdown-menu'
-import { Moon, Sun, Search, Activity, Clock } from 'lucide-react'
+import { Moon, Sun, Search, Activity, Clock, MessageCircle } from 'lucide-react'
 import { useTheme } from 'next-themes'
 import Image from 'next/image'
 
@@ -53,39 +53,32 @@ export default function Header() {
     }
   }
 
-  // Corrected implementation for fetching market status
   useEffect(() => {
     const fetchMarketStatus = async () => {
       try {
         const response = await fetch('/api/dashboard/market_status', {
-          credentials: 'include' // Include cookies
+          credentials: 'include'
         })
         if (!response.ok) throw new Error('Failed to fetch market info')
         const data: DashboardInfo = await response.json()
         setMarketStatus(data.market_status)
       } catch (error) {
         console.error('Error fetching market status:', error)
-        setMarketStatus('') // Reset on error
+        setMarketStatus('')
       }
     }
 
     if (isLoggedIn) {
-      // Fetch immediately when the user logs in
       fetchMarketStatus()
-
-      // Set up an interval to periodically check the status
-      const intervalId = setInterval(fetchMarketStatus, 300000) // 5 minutes
-
-      // Cleanup function to clear the interval on component unmount or when isLoggedIn changes
+      const intervalId = setInterval(fetchMarketStatus, 300000)
       return () => clearInterval(intervalId)
     } else {
-      // Clear market status if the user is not logged in
       setMarketStatus('')
     }
-  }, [isLoggedIn]) // This effect depends on the user's login status
+  }, [isLoggedIn])
 
   const handleLogout = () => {
-    logout() // Correctly call the logout function from the context
+    logout()
     router.push(`/login`)
   }
 
@@ -156,6 +149,34 @@ export default function Header() {
       }
     }
   }, [stockSearch, isLoggedIn])
+
+  const handleNewChat = async () => {
+    try {
+      const response = await fetch('/api/sessions/init', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query: 'Start a new chat',
+          isDeepResearch: false
+        })
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Failed to create session')
+      }
+
+      const data = await response.json()
+      router.push(
+        `/chat/${data.session_id}?query=${encodeURIComponent(
+          'Start a new chat'
+        )}&isDeepResearch=false`
+      )
+    } catch (error) {
+      console.error('Error creating new chat session:', error)
+      router.push('/')
+    }
+  }
 
   const marketStatusInfo = getMarketStatusInfo(marketStatus)
 
@@ -245,6 +266,20 @@ export default function Header() {
               <>
                 <Button
                   variant="ghost"
+                  size="icon"
+                  onClick={handleNewChat}
+                  title="New Chat"
+                >
+                  <MessageCircle className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  onClick={() => router.push('/watchlist')}
+                >
+                  Watchlist
+                </Button>
+                <Button
+                  variant="ghost"
                   onClick={() => router.push('/portfolio')}
                 >
                   Portfolio
@@ -253,12 +288,11 @@ export default function Header() {
                   variant="ghost"
                   onClick={() => router.push('/knowledge_base')}
                 >
-                  Knowledge Base
+                  Finance Knowledge Base
                 </Button>
                 <Button variant="ghost" onClick={() => router.push('/news')}>
                   News
                 </Button>
-
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="ghost">More</Button>
