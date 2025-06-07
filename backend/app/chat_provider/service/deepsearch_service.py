@@ -331,27 +331,19 @@ class DeepSearchChatService:
             Dict with search results and updated iteration count
         """
 
-        # Get state
         search_queries = state["search_queries"]
 
-        # Get configuration
         configurable = Configuration.from_runnable_config(config)
         search_api = get_config_value(configurable.search_api)
-        search_api_config = (
-            configurable.search_api_config or {}
-        )  # Get the config dict, default to empty
-        params_to_pass = get_search_params(
-            search_api, search_api_config
-        )  # Filter parameters
+        search_api_config = configurable.search_api_config or {}
+        params_to_pass = get_search_params(search_api, search_api_config)
 
-        # Web search
         query_list = [
             query.search_query
             for query in search_queries
             if query.search_query is not None
         ]
 
-        # Search the web with parameters
         source_str = await select_and_execute_search(
             search_api, query_list, params_to_pass
         )

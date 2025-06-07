@@ -48,33 +48,44 @@ export default function Header() {
     return {
       isLive,
       text: isLive ? 'Market Open' : 'Market Closed',
-      color: isLive ? 'text-green-600 border' : 'text-red-600 border',
+      color: isLive ? 'text-green-600' : 'text-red-600 ',
       icon: isLive ? Activity : Clock
     }
   }
 
-  // const fetchMarketStatus = async () => {
-  //   if (!isLoggedIn) {
-  //     setMarketStatus('') // Clear market status if not logged in
-  //     return
-  //   }
+  // Corrected implementation for fetching market status
+  useEffect(() => {
+    const fetchMarketStatus = async () => {
+      try {
+        const response = await fetch('/api/dashboard/market_status', {
+          credentials: 'include' // Include cookies
+        })
+        if (!response.ok) throw new Error('Failed to fetch market info')
+        const data: DashboardInfo = await response.json()
+        setMarketStatus(data.market_status)
+      } catch (error) {
+        console.error('Error fetching market status:', error)
+        setMarketStatus('') // Reset on error
+      }
+    }
 
-  //   try {
-  //     const response = await fetch('/api/dashboard/market_status', {
-  //       credentials: 'include' // Include cookies
-  //     })
-  //     if (!response.ok) throw new Error('Failed to fetch market info')
-  //     const data: DashboardInfo = await response.json()
-  //     setMarketStatus(data.market_status)
-  //   } catch (error) {
-  //     console.error('Error fetching market status:', error)
-  //     setMarketStatus('')
-  //   }
-  // }
+    if (isLoggedIn) {
+      // Fetch immediately when the user logs in
+      fetchMarketStatus()
 
-  // const interval = setInterval(fetchMarketStatus, 300000)
+      // Set up an interval to periodically check the status
+      const intervalId = setInterval(fetchMarketStatus, 300000) // 5 minutes
+
+      // Cleanup function to clear the interval on component unmount or when isLoggedIn changes
+      return () => clearInterval(intervalId)
+    } else {
+      // Clear market status if the user is not logged in
+      setMarketStatus('')
+    }
+  }, [isLoggedIn]) // This effect depends on the user's login status
 
   const handleLogout = () => {
+    logout() // Correctly call the logout function from the context
     router.push(`/login`)
   }
 
@@ -82,6 +93,7 @@ export default function Header() {
     e.preventDefault()
     if (stockSearch.trim()) {
       router.push(`/stocks/${stockSearch.trim().toUpperCase()}`)
+      setStockSearch('')
       setSearchResults([])
       setIsDropdownOpen(false)
     }
@@ -109,7 +121,7 @@ export default function Header() {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({ input_query: query }),
-        credentials: 'include' // Include cookies
+        credentials: 'include'
       })
 
       if (!response.ok) {
@@ -126,11 +138,6 @@ export default function Header() {
       setIsLoading(false)
     }
   }
-
-  useEffect(() => {
-    // fetchMarketStatus()
-    // return () => clearInterval(interval)
-  }, [isLoggedIn])
 
   useEffect(() => {
     if (debounceRef.current) {
@@ -157,17 +164,16 @@ export default function Header() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           <div className="flex items-center gap-6">
-            <span className="relative h-10 w-10">
-              <Image
-                src="/zenfi_logo.png"
-                alt="zenfi_logo"
-                height={40}
-                width={40}
-                priority
-                className="block"
-              />
-            </span>
-            <Link href="/" className="flex items-center gap-2">
+            <Link href="/" className="flex items-center gap-3">
+              <span className="relative h-10 w-10">
+                <Image
+                  src="/zenfi_logo.png"
+                  alt="zenfi_logo"
+                  fill
+                  priority
+                  className="object-contain"
+                />
+              </span>
               <h1 className="text-xl font-bold">ZenFi AI</h1>
             </Link>
 
@@ -192,18 +198,18 @@ export default function Header() {
                   placeholder="Search stocks (e.g., RELIANCE, NVIDIA)"
                   value={stockSearch}
                   onChange={e => setStockSearch(e.target.value)}
-                  className="pl-10 pr-4 border focus:border-transparent"
+                  className="pl-10 pr-4"
                 />
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               </form>
 
-              {isDropdownOpen && searchResults.length > 0 && (
+              {isDropdownOpen && (
                 <div className="absolute z-50 w-full mt-1 bg-background border rounded-lg shadow-lg max-h-96 overflow-y-auto">
                   {isLoading ? (
                     <div className="p-4 text-center text-muted-foreground">
-                      <div className="animate-spin rounded-full h-4 w-4 border-2 mx-auto"></div>
+                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-primary border-t-transparent mx-auto"></div>
                     </div>
-                  ) : (
+                  ) : searchResults.length > 0 ? (
                     searchResults.map(stock => (
                       <div
                         key={stock.symbol}
@@ -212,18 +218,22 @@ export default function Header() {
                       >
                         <div className="flex justify-between items-start">
                           <span className="font-semibold">{stock.symbol}</span>
-                          <span className="text-sm px-2 py-0.5 rounded">
+                          <span className="text-sm px-2 py-0.5 rounded bg-muted text-muted-foreground">
                             {stock.exchDisp}
                           </span>
                         </div>
                         <div className="text-sm mt-1">{stock.longname}</div>
                         {stock.sector && stock.industry && (
-                          <div className="text-xs mt-1">
+                          <div className="text-xs text-muted-foreground mt-1">
                             {stock.sector} • {stock.industry}
                           </div>
                         )}
                       </div>
                     ))
+                  ) : (
+                    <div className="p-4 text-center text-sm text-muted-foreground">
+                      No results found.
+                    </div>
                   )}
                 </div>
               )}
@@ -243,7 +253,7 @@ export default function Header() {
                   variant="ghost"
                   onClick={() => router.push('/knowledge_base')}
                 >
-                  Finance Knowledge Base
+                  Knowledge Base
                 </Button>
                 <Button variant="ghost" onClick={() => router.push('/news')}>
                   News
@@ -262,7 +272,7 @@ export default function Header() {
                     </DropdownMenuItem>
                     <DropdownMenuItem
                       onClick={handleLogout}
-                      className="text-red-600"
+                      className="text-red-600 focus:text-red-500"
                     >
                       Logout
                     </DropdownMenuItem>
@@ -274,15 +284,10 @@ export default function Header() {
                 <Button
                   variant="default"
                   onClick={() => router.push('/register')}
-                  className="border rounded-full"
                 >
                   Sign Up
                 </Button>
-                <Button
-                  variant="ghost"
-                  onClick={() => router.push('/login')}
-                  className="border rounded-full"
-                >
+                <Button variant="outline" onClick={() => router.push('/login')}>
                   Sign In
                 </Button>
               </>

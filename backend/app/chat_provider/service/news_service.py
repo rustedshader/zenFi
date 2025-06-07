@@ -2,13 +2,12 @@ import os
 import datetime
 
 from dotenv import load_dotenv
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langgraph.graph import END, START, MessagesState, StateGraph
+from langgraph.graph import END, START, StateGraph
 
 from app.chat_provider.models.news_models import (
-    FinanceNews,
     FinanceNewsReport,
     FinanceNewsState,
     SearchQueries,
@@ -97,7 +96,6 @@ class FinanceNewsService:
 
     async def generate_news_report(self, state: FinanceNewsState):
         news_search_response = state["news_search_response"]
-        # Use the new wrapper model instead of the single FinanceNews
         structured_llm = self.model.with_structured_output(FinanceNewsReport)
 
         current_date = datetime.datetime.now().strftime("%Y-%m-%d")
@@ -114,7 +112,6 @@ class FinanceNewsService:
             ]
         )
 
-        # Extract the list of news items from the wrapper
         return {"news_report": news_report_wrapper.news_items}
 
     def build_graph(self):
@@ -127,7 +124,7 @@ class FinanceNewsService:
             self.generate_topic_specific_financial_queries,
         )
         builder.add_node("search_financial_queries", self.search_financial_queries)
-        builder.add_node("generate_news_report", self.generate_news_report)  # New node
+        builder.add_node("generate_news_report", self.generate_news_report)
 
         builder.add_edge(START, "generate_queries")
         builder.add_edge("generate_queries", "search_web")
@@ -135,8 +132,8 @@ class FinanceNewsService:
         builder.add_edge(
             "generate_topic_specific_financial_queries", "search_financial_queries"
         )
-        builder.add_edge("search_financial_queries", "generate_news_report")  # New edge
-        builder.add_edge("generate_news_report", END)  # End after generating report
+        builder.add_edge("search_financial_queries", "generate_news_report")
+        builder.add_edge("generate_news_report", END)
 
         self.graph = builder.compile()
         return self.graph
@@ -147,7 +144,6 @@ class FinanceNewsService:
             "topic": "Top Financial News",
         }
         x = await graph.ainvoke(initial_state)
-        # Convert SearchQueries object to dict for serialization
         response = dict(x)
         if isinstance(response.get("search_queries"), SearchQueries):
             response["search_queries"] = response["search_queries"].dict()
