@@ -26,6 +26,7 @@ dependencies = [
     "markdownify>=1.1.0",
     "matplotlib>=3.10.3",
     "mftool>=2.9",
+    "mplfinance>=0.12.10b0",
     "nselib>=1.9",
     "pandas-market-calendars>=5.1.0",
     "passlib>=1.7.4",

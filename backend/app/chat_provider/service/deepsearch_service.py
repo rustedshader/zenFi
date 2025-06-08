@@ -61,7 +61,7 @@ from app.chat_provider.tools.basic_tools import (
     youtube_search_tool,
     python_sandbox_tool,
 )
-from app.chat_provider.models.chat_models import (
+from app.chat_provider.models.deepsearch_models import (
     Feedback,
     Queries,
     ReportState,

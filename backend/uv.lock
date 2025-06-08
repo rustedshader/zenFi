@@ -250,6 +250,7 @@ dependencies = [
     { name = "markdownify" },
     { name = "matplotlib" },
     { name = "mftool" },
+    { name = "mplfinance" },
     { name = "nselib" },
     { name = "pandas-market-calendars" },
     { name = "passlib" },
@@ -293,6 +294,7 @@ requires-dist = [
     { name = "markdownify", specifier = ">=1.1.0" },
     { name = "matplotlib", specifier = ">=3.10.3" },
     { name = "mftool", specifier = ">=2.9" },
+    { name = "mplfinance", specifier = ">=0.12.10b0" },
     { name = "nselib", specifier = ">=1.9" },
     { name = "pandas-market-calendars", specifier = ">=5.1.0" },
     { name = "passlib", specifier = ">=1.7.4" },
@@ -2516,6 +2518,19 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/23/fa/cbbb7fcd0e287a715f1cd28a10de94c0535bd94164e38b852abc18da28c6/mmh3-5.1.0-cp313-cp313-win32.whl", hash = "sha256:c65dbd12885a5598b70140d24de5839551af5a99b29f9804bb2484b29ef07692", size = 40828, upload-time = "2025-01-25T08:39:23.372Z" },
     { url = "https://files.pythonhosted.org/packages/09/33/9fb90ef822f7b734955a63851907cf72f8a3f9d8eb3c5706bfa6772a2a77/mmh3-5.1.0-cp313-cp313-win_amd64.whl", hash = "sha256:10db7765201fc65003fa998faa067417ef6283eb5f9bba8f323c48fd9c33e91f", size = 41504, upload-time = "2025-01-25T08:39:24.286Z" },
     { url = "https://files.pythonhosted.org/packages/16/71/4ad9a42f2772793a03cb698f0fc42499f04e6e8d2560ba2f7da0fb059a8e/mmh3-5.1.0-cp313-cp313-win_arm64.whl", hash = "sha256:b22fe2e54be81f6c07dcb36b96fa250fb72effe08aa52fbb83eade6e1e2d5fd7", size = 38890, upload-time = "2025-01-25T08:39:25.28Z" },
+]
+
+[[package]]
+name = "mplfinance"
+version = "0.12.10b0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "matplotlib" },
+    { name = "pandas" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/6c/a9/34e7998d02fb58fae04f750444ce4e95e75f3a08dad17fb2d32098a97834/mplfinance-0.12.10b0.tar.gz", hash = "sha256:7da150b5851aa5119ad6e06b55e48338b619bb6773f1b85df5de67a5ffd917bf", size = 70117, upload-time = "2023-08-02T15:13:53.829Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d7/d9/31c436ea7673c21a5bf3fc747bc7f63377582dfe845c3004d3e46f9deee0/mplfinance-0.12.10b0-py3-none-any.whl", hash = "sha256:76d3b095f05ff35de730751649de063bea4064d0c49b21b6182c82997a7f52bb", size = 75016, upload-time = "2023-08-02T15:13:52.022Z" },
 ]
 
 [[package]]

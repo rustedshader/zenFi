@@ -1,11 +1,11 @@
 import os
 from typing import AsyncGenerator
+from langchain_sandbox import PyodideSandbox
 from langgraph.graph import StateGraph, START, END
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 from sqlalchemy import select
 from app.chat_provider.service.chat_service_prompt import SYSTEM_INSTRUCTIONS
-from langgraph.graph import MessagesState
 from langgraph.prebuilt import ToolNode
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from langchain_core.runnables import RunnableConfig
@@ -372,10 +372,60 @@ class ChatService:
         except Exception as e:
             return {"summary": f"Error generating heading: {str(e)}"}
 
+    async def check_python_code_needed(self, state: AppState):
+        """
+        Use LLM to determine if the python code generation needed for financial calculations.
+        """
+        last_message = state["messages"][-1]
+        if isinstance(last_message, HumanMessage):
+            user_input = last_message.content
+
+            python_code_needed_decision_prompt = f"""
+                        <Context>
+                        {user_input}
+                        </Context>
+
+                        Analyze the user input context to check if python code generation is needed for financial calculations.
+
+                        Respond with ONLY "YES" if the knowledge base is needed, or "NO" if it's not.
+                        """
+
+            response = await self.model.ainvoke(
+                [
+                    SystemMessage(
+                        content="You are an expert at determining information requirements."
+                    ),
+                    HumanMessage(content=python_code_needed_decision_prompt),
+                ]
+            )
+
+            needs_python_code = response.content.strip().upper() == "YES"
+            print(
+                f"DEBUG [check_python_code_needed_query]: Query: '{user_input}', Needs python code: {needs_python_code}"
+            )
+
+            return {"needs_python_code": needs_python_code}
+
+        return {"needs_python_code": False}
+
+    async def generate_python_code(self, state: AppState):
+        messages = state["messages"]
+        last_message = messages[-1]
+
+        pass
+
+    async def execute_python_code(self, state: AppState):
+        code = state["code"]
+        sandbox = PyodideSandbox(
+            # Allow Pyodide to install python packages that
+            # might be required.
+            allow_net=True,
+        )
+        print(await sandbox.execute(code))
+
     def build_graph(self, checkpointer):
         builder = StateGraph(AppState)
 
-        # Add all nodes
         builder.add_node("check_portfolio_query", self.check_portfolio_query)
         builder.add_node("check_knowledge_base_query", self.check_knowledge_base_query)
         builder.add_node("determine_search_need", self.determine_search_need)
@@ -386,7 +436,6 @@ class ChatService:
         builder.add_node("tools", self.tool_node)
         builder.add_node("generate_summary", self.generate_summary)
 
-        # Build the flow
         builder.add_edge(START, "check_portfolio_query")
         builder.add_edge("check_portfolio_query", "check_knowledge_base_query")
         builder.add_edge("check_knowledge_base_query", "determine_search_need")
@@ -432,6 +481,7 @@ class ChatService:
             }
         )
         input_state = {"messages": [HumanMessage(content=user_input)]}
+        yielded_contents = set()  # Track yielded content to avoid duplicates
         async for state_update_values in self.graph.astream(
             input_state, config, stream_mode="values"
         ):
@@ -448,7 +498,8 @@ class ChatService:
                         else:
                             content_str += str(item) + "\n"
                     content = content_str.strip()
-                if content:
+                if content and content not in yielded_contents:
+                    yielded_contents.add(content)
                     yield content
 
 

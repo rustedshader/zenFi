@@ -19,7 +19,7 @@ from langchain_core.tools import tool
 
 from langsmith import traceable
 
-from app.chat_provider.models.chat_models import Section
+from app.chat_provider.models.deepsearch_models import Section
 # from langchain_sandbox import PyodideSandbox
 
 # sandbox = PyodideSandbox(allow_net=True)
