@@ -75,3 +75,51 @@ async def get_user_portfolio_tool(user_id: str) -> str:
             output_lines.append("")
 
         return "\n".join(output_lines).strip()
+
+
+async def get_user_portfolio(user_id: str) -> str:
+    """
+    Fetches the user's default portfolio data, including asset details.
+    Input: user_id (str)
+    Output: A formatted string with portfolio and asset information.
+    """
+    stmt = (
+        select(Portfolio)
+        .where(Portfolio.user_id == int(user_id))
+        .where(Portfolio.is_default)
+        .options(selectinload(Portfolio.assets))
+    )
+    async for db in get_db():
+        result = await db.execute(stmt)
+        portfolios = result.scalars().all()
+        if not portfolios:
+            return "No default portfolio found for this user."
+
+        output_lines = []
+        for portfolio in portfolios:
+            created_at = str(portfolio.created_at)
+            description = str(portfolio.description)
+
+            output_lines.append(f"Portfolio Name: {portfolio.name}")
+            output_lines.append(f"Created At: {created_at}")
+            output_lines.append(f"Description: {description}")
+            if portfolio.assets:
+                output_lines.append("Assets:")
+                for asset in portfolio.assets:
+                    symbol = getattr(asset, "identifier", "N/A")
+                    created_at = getattr(asset, "created_at", "N/A")
+                    asset_id = getattr(asset, "id", "N/A")
+                    asset_type = getattr(asset, "asset_type", "N/A")
+                    quantity = getattr(asset, "quantity", "N/A")
+                    purchase_price = getattr(asset, "purchase_price", "N/A")
+                    purchase_date = getattr(asset, "purchase_date", "N/A")
+                    current_value = getattr(asset, "current_value", "N/A")
+                    notes = getattr(asset, "notes", "N/A")
+                    output_lines.append(
+                        f"  - Asset ID: {asset_id}, Asset Type: {asset_type}, Symbol: {symbol}, Created At: {created_at}, Quantity: {quantity}, Purchase Price: {purchase_price}, Purchase Date: {purchase_date}, Current Value: {current_value}, Notes: {notes}"
+                    )
+            else:
+                output_lines.append("Assets: None")
+            output_lines.append("")
+
+        return "\n".join(output_lines).strip()

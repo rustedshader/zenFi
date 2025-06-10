@@ -5,7 +5,12 @@ from langgraph.graph import StateGraph, START, END
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 from sqlalchemy import select
-from app.chat_provider.service.chat_service_prompt import SYSTEM_INSTRUCTIONS
+from app.chat_provider.service.chat_service_prompt import (
+    SYSTEM_INSTRUCTIONS,
+    python_code_needed_decision_prompt,
+    python_code_context_prompt,
+    python_code_generation_prompt,
+)
 from langgraph.prebuilt import ToolNode
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from langchain_core.runnables import RunnableConfig
@@ -39,28 +44,37 @@ from app.chat_provider.tools.finance_tools import (
     get_stock_price_change,
 )
 from app.chat_provider.tools.web_search_tools import (
-    google_search_tool,
     duckduckgo_search_run_tool,
     duckduckgo_search_results_tool,
     brave_search_tool,
 )
 from app.chat_provider.tools.news_tools import (
-    fetch_finance_news,
     duckduckgo_news_search_tool,
 )
 from app.chat_provider.tools.basic_tools import (
     get_current_datetime,
     youtube_search_tool,
-    python_sandbox_tool,
 )
 
-from app.chat_provider.models.chat_models import AppState
+from app.chat_provider.models.chat_models import (
+    AppState,
+    PythonCode,
+    PythonCodeContext,
+    PythonSearchNeed,
+)
 from app.chat_provider.tools.rag_tools import (
     get_db,
-    get_user_portfolio_tool,
 )
-from app.api.api_models import ChatSession
-from app.chat_provider.tools.knowledge_base import query_knowledge_base
+from app.api.api_models import ChatSession, KnowledgeBase, Portfolio
+from app.chat_provider.service.knowledge_base.knowledege_base import search_enhanced
+from sqlalchemy.orm import selectinload
+
+from app.chat_provider.service.deepsearch_utils import (
+    get_search_params,
+    select_and_execute_search,
+)
+
+import datetime
 
 
 class ChatService:
@@ -97,17 +111,12 @@ class ChatService:
             get_stock_point_change,
             get_stock_percentage_change,
             get_stock_price_change,
-            google_search_tool,
             brave_search_tool,
             duckduckgo_search_results_tool,
             duckduckgo_search_run_tool,
-            fetch_finance_news,
             duckduckgo_news_search_tool,
             get_current_datetime,
             youtube_search_tool,
-            get_user_portfolio_tool,
-            query_knowledge_base,
-            python_sandbox_tool,
         ]
         self.tool_node = ToolNode(self.tools)
         self.system_prompt_message = SystemMessage(
@@ -117,14 +126,10 @@ class ChatService:
         self.bound_llm = self.model.bind_tools(self.tools)
 
     async def check_knowledge_base_query(self, state: AppState):
-        """
-        Use LLM to determine if the knowledge base (storing user financial data) is needed for the user's query.
-        """
         last_message = state["messages"][-1]
         if isinstance(last_message, HumanMessage):
             user_input = last_message.content
 
-            # Create a prompt to determine if knowledge base is needed
             knowledge_base_decision_prompt = f"""
                         Analyze the user query to determine if it requires accessing their personal knowledge base, which contains their transaction history, portfolio, and financial notes.
 
@@ -167,16 +172,90 @@ class ChatService:
 
         return {"needs_knowledge_base": False}
 
-    # TODO: Can Use Pydantic model here to get structured output for the llm
+    async def search_knowledge_base(
+        self, state: AppState, config: RunnableConfig
+    ) -> dict:
+        try:
+            last_message = state["messages"][-1]
+            if not isinstance(last_message, HumanMessage):
+                print(
+                    "DEBUG [search_knowledge_base]: Last message is not a HumanMessage"
+                )
+                return {"knowledge_base_results": "Invalid query format"}
+
+            query = last_message.content
+            print(
+                f"DEBUG [search_knowledge_base]: Searching knowledge base for query: '{query}'"
+            )
+
+            # Get user_id from config
+            user_id = (
+                config["configurable"].get("user_id")
+                if config and "configurable" in config
+                else None
+            )
+            if not user_id:
+                print("DEBUG [search_knowledge_base]: No user_id found in config")
+                return {
+                    "knowledge_base_results": "No user ID found. Cannot search knowledge base."
+                }
+
+            async for db in get_db():
+                stmt = select(KnowledgeBase).where(
+                    KnowledgeBase.is_default,
+                    KnowledgeBase.user_id == int(user_id),
+                )
+                result = await db.execute(stmt)
+                knowledge_base = result.scalar_one_or_none()
+
+                if not knowledge_base:
+                    print("DEBUG [search_knowledge_base]: No knowledge base found")
+                    return {
+                        "knowledge_base_results": "No knowledge base found. Please create or select a knowledge base."
+                    }
+
+                kb_table_id = str(knowledge_base.table_id)
+                if not kb_table_id:
+                    print(
+                        "DEBUG [search_knowledge_base]: Knowledge base has no table_id"
+                    )
+                    return {
+                        "knowledge_base_results": "Knowledge base has no table_id set."
+                    }
+
+                try:
+                    rag_result = search_enhanced(
+                        table_id=kb_table_id,
+                        query=query,
+                        filter={"context": "some_context"},
+                    )
+                    if rag_result.get("answer"):
+                        print(
+                            f"DEBUG [search_knowledge_base]: Found answer: {rag_result['answer']}"
+                        )
+                        return {"knowledge_base_results": rag_result["answer"]}
+                    else:
+                        print("DEBUG [search_knowledge_base]: No answer found")
+                        return {
+                            "knowledge_base_results": "No relevant information found in the knowledge base."
+                        }
+                except Exception as e:
+                    print(f"ERROR [search_knowledge_base]: Search failed: {str(e)}")
+                    return {
+                        "knowledge_base_results": f"Error searching knowledge base: {str(e)}"
+                    }
+
+            return {"knowledge_base_results": "Database connection failed."}
+
+        except Exception as e:
+            print(f"ERROR [search_knowledge_base]: Unexpected error: {str(e)}")
+            return {"knowledge_base_results": f"Unexpected error: {str(e)}"}
+
     async def determine_search_need(self, state: AppState):
-        """
-        Use LLM to determine if web search is needed for the user's query.
-        """
         last_message = state["messages"][-1]
         if isinstance(last_message, HumanMessage):
             user_input = last_message.content
 
-            # Create a prompt to determine if search is needed
             search_decision_prompt = f"""
             Analyze the following user query and determine if a web search is needed to answer it properly.
 
@@ -213,9 +292,10 @@ class ChatService:
     async def generate_multiple_queries(self, state: AppState):
         number_of_search_queries = 3
         last_message = state["messages"][-1]
+        todays_date = datetime.datetime.now().strftime("%Y-%m-%d")
         if isinstance(last_message, HumanMessage):
             user_input = last_message.content
-            query_prompt = f"Based on the following user input, generate {number_of_search_queries} distinct search queries to find comprehensive information: {user_input}"
+            query_prompt = f"Todays Date is: {todays_date}. Based on the following user input, generate {number_of_search_queries} distinct search queries to find comprehensive information: {user_input}"
             query_response = await self.model.ainvoke(
                 [
                     SystemMessage(content="You are a helpful financial assistant."),
@@ -226,21 +306,22 @@ class ChatService:
             return {"search_queries": queries}
         return {}
 
-    async def perform_multiple_searches(self, state: AppState):
-        queries = state.get("search_queries", [])
-        search_results = []
-        for query in queries:
-            search_tool = google_search_tool
-            try:
-                result = await search_tool.ainvoke({"query": query})
-                search_results.append(result)
-            except Exception as e:
-                search_results.append(f"Search failed for '{query}': {str(e)}")
-        combined_results = "\n\n".join(search_results)
-        search_message = SystemMessage(
-            content=f"Search results for queries '{', '.join(queries)}': {combined_results}"
+    async def search_web(self, state: AppState, config: RunnableConfig):
+        """Execute web searches for the section queries."""
+        search_queries = state["search_queries"]
+        search_api = config["configurable"].get("search_api", "googlesearch")
+        search_api_config = config["configurable"].get("search_api_config", {})
+        params_to_pass = get_search_params(search_api, search_api_config)
+
+        query_list = [query for query in search_queries if query is not None]
+
+        source_str = await select_and_execute_search(
+            search_api, query_list, params_to_pass
         )
-        return {"messages": [search_message]}
+
+        return {
+            "source_str": source_str,
+        }
 
     async def evaluate_search_results(self, state: AppState):
         messages = state["messages"]
@@ -274,51 +355,96 @@ class ChatService:
         )
         return {"needs_portfolio": needs_portfolio_flag}
 
-    async def call_model(self, state: AppState, config: RunnableConfig):
+    async def generate_portfolio_data(self, state: AppState, config: RunnableConfig):
         if config:
             current_user_id = config["configurable"].get("user_id")
+        stmt = (
+            select(Portfolio)
+            .where(Portfolio.user_id == int(current_user_id))
+            .where(Portfolio.is_default)
+            .options(selectinload(Portfolio.assets))
+        )
+        try:
+            async for db in get_db():
+                result = await db.execute(stmt)
+                portfolios = result.scalars().all()
+                if not portfolios:
+                    return "No default portfolio found for this user."
 
+                output_lines = []
+                for portfolio in portfolios:
+                    created_at = str(portfolio.created_at)
+                    description = str(portfolio.description)
+
+                    output_lines.append(f"Portfolio Name: {portfolio.name}")
+                    output_lines.append(f"Created At: {created_at}")
+                    output_lines.append(f"Description: {description}")
+                    if portfolio.assets:
+                        output_lines.append("Assets:")
+                        for asset in portfolio.assets:
+                            symbol = getattr(asset, "identifier", "N/A")
+                            created_at = getattr(asset, "created_at", "N/A")
+                            asset_id = getattr(asset, "id", "N/A")
+                            asset_type = getattr(asset, "asset_type", "N/A")
+                            quantity = getattr(asset, "quantity", "N/A")
+                            purchase_price = getattr(asset, "purchase_price", "N/A")
+                            purchase_date = getattr(asset, "purchase_date", "N/A")
+                            current_value = getattr(asset, "current_value", "N/A")
+                            notes = getattr(asset, "notes", "N/A")
+                            output_lines.append(
+                                f"  - Asset ID: {asset_id}, Asset Type: {asset_type}, Symbol: {symbol}, Created At: {created_at}, Quantity: {quantity}, Purchase Price: {purchase_price}, Purchase Date: {purchase_date}, Current Value: {current_value}, Notes: {notes}"
+                            )
+                    else:
+                        output_lines.append("Assets: None")
+                    output_lines.append("")
+                    return {"portfolio_data": "\n".join(output_lines).strip()}
+                print(
+                    f"DEBUG [generate_portfolio_data]: Generated portfolio data for user {current_user_id}"
+                )
+                print("DEBUG [generate_portfolio_data]: Output lines:", output_lines)
+
+                return {"portfolio_data": "\n".join(output_lines).strip()}
+        except Exception as e:
+            print(f"ERROR [search_portfolio]: {str(e)}")
+            return f"Error fetching portfolio: {str(e)}"
+
+    async def call_model(self, state: AppState):
         llm_messages = [self.system_prompt_message]
         llm_messages.extend(state["messages"])
 
+        additional_context = []
+
         if state.get("needs_portfolio"):
-            if current_user_id:
-                portfolio_system_message = SystemMessage(
-                    content=f"The user is asking about their portfolio. Their user ID is '{current_user_id}'. "
-                    f"You MUST use the 'get_user_portfolio_tool' to fetch their default portfolio data. "
-                    f"When calling 'get_user_portfolio_tool', ensure you provide the 'user_id' argument with the exact value '{current_user_id}'."
+            if state.get("portfolio_data"):
+                additional_context.append(
+                    f"User Portfolio Data:\n{state['portfolio_data']}"
                 )
-            else:
-                portfolio_system_message = SystemMessage(
-                    content="The user is asking about their portfolio. You need a user ID to call 'get_user_portfolio_tool'. "
-                    "If you don't have it and it hasn't been provided by the system, you may need to ask the user for their user ID."
-                )
-            llm_messages.append(portfolio_system_message)
 
         if state.get("needs_knowledge_base"):
-            if current_user_id:
-                knowledge_base_system_message = SystemMessage(
-                    content=f"The user's query requires accessing their personal financial data. You MUST use the 'query_knowledge_base' tool to answer this question. "
-                    f"Use the user's original query as the 'query' parameter for the tool. The user's ID is '{current_user_id}'."
+            if state.get("knowledge_base_results"):
+                additional_context.append(
+                    f"Knowledge Base Results:\n{state['knowledge_base_results']}"
                 )
-            else:
-                knowledge_base_system_message = SystemMessage(
-                    content="The user is asking a question that requires their knowledge base, but their user ID is missing. "
-                    "You must ask the user for their user ID before you can proceed."
+        if state.get("needs_web_search"):
+            if state.get("source_str"):
+                additional_context.append(f"Web Search Results:\n{state['source_str']}")
+
+        if state.get("needs_python_code"):
+            if state.get("execution_result"):
+                additional_context.append(
+                    f"Python Execution Result:\n{state['execution_result']}"
                 )
-            llm_messages.append(knowledge_base_system_message)
+
+        if additional_context:
+            print(additional_context)
+            context_message = SystemMessage(
+                content="Additional Context for Response:\n\n"
+                + "\n\n".join(additional_context)
+            )
+            llm_messages.append(context_message)
 
         response = await self.bound_llm.ainvoke(llm_messages)
-        print("Model response:", response)
         return {"messages": [response]}
-
-    def should_continue(self, state: AppState):
-        messages = state["messages"]
-        last_message = messages[-1]
-        if isinstance(last_message, AIMessage):
-            if last_message.tool_calls:
-                return "tools"
-        return "generate_summary"
 
     def route_after_search_decision(self, state: AppState):
         """
@@ -372,99 +498,250 @@ class ChatService:
         except Exception as e:
             return {"summary": f"Error generating heading: {str(e)}"}
 
-    async def check_python_code_needed(self, state: AppState):
-        """
-        Use LLM to determine if the python code generation needed for financial calculations.
-        """
-        last_message = state["messages"][-1]
-        if isinstance(last_message, HumanMessage):
-            user_input = last_message.content
+    async def check_python_code_needed(self, state: AppState) -> dict:
+        try:
+            if not state["messages"]:
+                return False
 
-            python_code_needed_decision_prompt = f"""
-                        <Context>
-                        {user_input}
-                        </Context>
+            last_message = state["messages"][-1]
 
-                        Analyze the user input context to check if python code generation is needed for financial calculations.
+            if not isinstance(last_message, HumanMessage):
+                return False
 
-                        Respond with ONLY "YES" if the knowledge base is needed, or "NO" if it's not.
-                        """
+            structured_llm = self.model.with_structured_output(PythonSearchNeed)
 
-            response = await self.model.ainvoke(
+            formatted_prompt = python_code_needed_decision_prompt.format(
+                user_query=last_message
+            )
+
+            response = await structured_llm.ainvoke(
                 [
-                    SystemMessage(
-                        content="You are an expert at determining information requirements."
-                    ),
-                    HumanMessage(content=python_code_needed_decision_prompt),
+                    SystemMessage(content=formatted_prompt),
+                    HumanMessage(content="Does Python Code Generation needed ? "),
                 ]
             )
 
-            needs_python_code = response.content.strip().upper() == "YES"
+            print("LOG:", response.needs_python_code)
+
+            if hasattr(response, "needs_python_code"):
+                needs_python_code = response.needs_python_code
+            elif (
+                hasattr(response, "content")
+                and isinstance(response.content, dict)
+                and "needs_python_code" in response.content
+            ):
+                needs_python_code = response.content["needs_python_code"]
+            else:
+                print(
+                    f"DEBUG [check_python_code_needed]: Empty or invalid response for query: '{last_message}'"
+                )
+                return {"needs_python_code": False}
+
             print(
-                f"DEBUG [check_python_code_needed_query]: Query: '{user_input}', Needs python code: {needs_python_code}"
+                f"DEBUG [check_python_code_needed]: Query: '{last_message}', Needs Python code: {needs_python_code}"
             )
 
             return {"needs_python_code": needs_python_code}
 
-        return {"needs_python_code": False}
+        except Exception as e:
+            print(
+                f"ERROR [check_python_code_needed]: Failed to process query: {str(e)}"
+            )
+            return {"needs_python_code": False}
+
+    async def generate_python_code_context(self, state: AppState):
+        try:
+            if not state["messages"]:
+                return {"python_code_context": None}
+
+            last_message = state["messages"][-1]
+            if not isinstance(last_message, HumanMessage):
+                return {"python_code_context": None}
+
+            if not state.get("needs_python_code", False):
+                print(
+                    f"DEBUG [generate_python_code_context]: Python code generation not needed for query: '{last_message.content}'"
+                )
+                return {"python_code_context": None}
+
+            structured_llm = self.model.with_structured_output(PythonCodeContext)
+            formatted_prompt = python_code_context_prompt.format(
+                user_query=last_message.content
+            )
+
+            response = await structured_llm.ainvoke(
+                [
+                    SystemMessage(content=formatted_prompt),
+                    HumanMessage(
+                        content="Provide the Python code context for the user's query."
+                    ),
+                ]
+            )
+
+            python_code_context = getattr(response, "python_code_context", None)
+            if not python_code_context:
+                print(
+                    f"DEBUG [generate_python_code_context]: No context generated for query: '{last_message.content}'"
+                )
+                return {"python_code_context": None}
+
+            print(
+                f"DEBUG [generate_python_code_context]: Query: '{last_message.content}', Context: {python_code_context}"
+            )
+            return {"python_code_context": python_code_context}
+
+        except Exception as e:
+            print(
+                f"ERROR [generate_python_code_context]: Failed to process query: {str(e)}"
+            )
+            return {"python_code_context": None}
 
     async def generate_python_code(self, state: AppState):
-        messages = state["messages"]
-        last_message = messages[-1]
+        try:
+            if not state["messages"] or not state.get("needs_python_code", False):
+                return {"python_code": None}
 
-        pass
+            last_message = state["messages"][-1]
+            if not isinstance(last_message, HumanMessage):
+                return {"python_code": None}
+
+            python_code_context = state.get("python_code_context")
+            if not python_code_context:
+                print(
+                    f"DEBUG [generate_python_code]: No context available for query: '{last_message.content}'"
+                )
+                return {"python_code": None}
+
+            structured_llm = self.model.with_structured_output(PythonCode)
+            formatted_prompt = python_code_generation_prompt.format(
+                user_query=last_message.content, prompt=python_code_context
+            )
+
+            response = await structured_llm.ainvoke(
+                [
+                    SystemMessage(content=formatted_prompt),
+                    HumanMessage(content="Generate Python code."),
+                ]
+            )
+            python_code = getattr(response, "code", None)
+
+            if not python_code:
+                print(
+                    f"DEBUG [generate_python_code]: No code generated for query: '{last_message.content}'"
+                )
+                return {"python_code": None}
+
+            print(
+                f"DEBUG [generate_python_code]: Query: '{last_message.content}', Code: {python_code}"
+            )
+            return {"python_code": python_code}
+
+        except Exception as e:
+            print(f"ERROR [generate_python_code]: Failed to process query: {str(e)}")
+            return {"python_code": None}
 
     async def execute_python_code(self, state: AppState):
-        code = state["code"]
-        sandbox = PyodideSandbox(
-            # Allow Pyodide to install python packages that
-            # might be required.
-            allow_net=True,
-        )
-        print(await sandbox.execute(code))
+        try:
+            python_code = state.get("python_code")
+            if not python_code:
+                print("DEBUG [execute_python_code]: No Python code to execute")
+                return {"execution_result": "No code provided"}
+
+            sandbox = PyodideSandbox(allow_net=True)
+            result = await sandbox.execute(python_code)
+            print(f"DEBUG [execute_python_code]: Execution result: {result}")
+            return {"execution_result": result}
+
+        except Exception as e:
+            print(f"ERROR [execute_python_code]: Execution failed: {str(e)}")
+            return {"execution_result": f"Error: {str(e)}"}
 
     def build_graph(self, checkpointer):
         builder = StateGraph(AppState)
 
+        # --- Nodes ---- #
         builder.add_node("check_portfolio_query", self.check_portfolio_query)
+        builder.add_node("generate_portfolio_data", self.generate_portfolio_data)
         builder.add_node("check_knowledge_base_query", self.check_knowledge_base_query)
+        builder.add_node("search_knowledge_base", self.search_knowledge_base)
+        builder.add_node("check_python_code_needed", self.check_python_code_needed)
+        builder.add_node(
+            "generate_python_code_context", self.generate_python_code_context
+        )
+        builder.add_node("generate_python_code", self.generate_python_code)
+        builder.add_node("execute_python_code", self.execute_python_code)
         builder.add_node("determine_search_need", self.determine_search_need)
         builder.add_node("generate_multiple_queries", self.generate_multiple_queries)
-        builder.add_node("perform_multiple_searches", self.perform_multiple_searches)
+        builder.add_node("search_web", self.search_web)
         builder.add_node("evaluate_search_results", self.evaluate_search_results)
         builder.add_node("call_model", self.call_model)
-        builder.add_node("tools", self.tool_node)
         builder.add_node("generate_summary", self.generate_summary)
+        builder.add_node("tool_node", self.tool_node)
 
+        # --- Edges ---- #
         builder.add_edge(START, "check_portfolio_query")
-        builder.add_edge("check_portfolio_query", "check_knowledge_base_query")
-        builder.add_edge("check_knowledge_base_query", "determine_search_need")
+        builder.add_conditional_edges(
+            "check_portfolio_query",
+            lambda state: state.get("needs_portfolio", False),
+            {True: "generate_portfolio_data", False: "check_knowledge_base_query"},
+        )
 
-        # Route after determining search need
+        builder.add_edge("generate_portfolio_data", "check_knowledge_base_query")
+        builder.add_conditional_edges(
+            "check_knowledge_base_query",
+            lambda state: state.get("needs_knowledge_base", False),
+            {True: "search_knowledge_base", False: "check_python_code_needed"},
+        )
+        builder.add_edge("search_knowledge_base", "check_python_code_needed")
+        builder.add_conditional_edges(
+            "check_python_code_needed",
+            lambda state: state.get("needs_python_code", False),
+            {True: "generate_python_code_context", False: "determine_search_need"},
+        )
+        builder.add_edge("generate_python_code_context", "generate_python_code")
+        builder.add_edge("generate_python_code", "execute_python_code")
+        builder.add_edge("execute_python_code", "determine_search_need")
+
         builder.add_conditional_edges(
             "determine_search_need",
-            self.route_after_search_decision,
+            lambda state: state.get("needs_web_search", False),
             {
-                "call_model": "call_model",
-                "generate_multiple_queries": "generate_multiple_queries",
+                True: "generate_multiple_queries",
+                False: "call_model",
             },
         )
 
-        # Search flow (only executed if search is needed)
-        builder.add_edge("generate_multiple_queries", "perform_multiple_searches")
-        builder.add_edge("perform_multiple_searches", "evaluate_search_results")
+        builder.add_edge("generate_multiple_queries", "search_web")
+        builder.add_edge("search_web", "evaluate_search_results")
         builder.add_conditional_edges(
             "evaluate_search_results",
-            lambda state: "generate_multiple_queries"
-            if not state.get("search_sufficient", False)
-            else "call_model",
+            lambda state: state.get("search_sufficient", False),
+            {
+                True: "call_model",
+                False: "call_model",
+            },
         )
 
-        # Model flow
+        def route_after_model_call(state: AppState):
+            """
+            Decide what to do after the LLM has been called.
+            If the model decided to use a tool, route to the tool_node.
+            Otherwise, the model has produced a final answer, so generate a summary.
+            """
+            last_message = state["messages"][-1]
+            if isinstance(last_message, AIMessage) and last_message.tool_calls:
+                return "tool_node"
+            else:
+                return "generate_summary"
+
         builder.add_conditional_edges(
-            "call_model", self.should_continue, ["tools", "generate_summary"]
+            "call_model",
+            route_after_model_call,
+            {"tool_node": "tool_node", "generate_summary": "generate_summary"},
         )
-        builder.add_edge("tools", "call_model")
+
+        builder.add_edge("tool_node", "call_model")
+
         builder.add_edge("generate_summary", END)
 
         self.graph = builder.compile(checkpointer=checkpointer)
@@ -478,10 +755,14 @@ class ChatService:
                 "thread_id": thread_id,
                 "user_id": user_id,
                 "session_id": session_id,
+                "search_api": "googlesearch",
+                "number_of_queries": 1,
+                "max_search_depth": 1,
             }
         )
+        print(config)
         input_state = {"messages": [HumanMessage(content=user_input)]}
-        yielded_contents = set()  # Track yielded content to avoid duplicates
+        yielded_contents = set()
         async for state_update_values in self.graph.astream(
             input_state, config, stream_mode="values"
         ):

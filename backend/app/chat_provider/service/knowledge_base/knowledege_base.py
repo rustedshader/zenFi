@@ -358,6 +358,7 @@ def ingest_documents_enhanced(
 def search_enhanced(
     query: str, filter: Optional[Dict[str, Any]], table_id: str, k: int = 10
 ):
+    print("LOG: Knowledge Base Table Id:", table_id)
     """Enhanced search with better retrieval, prompting, and response formatting."""
 
     prompt_template_str = """You are an intelligent document assistant. Your primary goal is to answer questions accurately based *only* on the provided context.
@@ -392,41 +393,33 @@ Answer:"""
         )
         # raise ValueError("GOOGLE_GEMINI_API_KEY is required for ChatGoogleGenerativeAI")
 
-    # Safety settings as defined by user
-    safety_settings = {
-        HarmCategory.HARM_CATEGORY_UNSPECIFIED: HarmBlockThreshold.BLOCK_NONE,
-        HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
-        HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
-        HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
-        HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
-    }
-
     llm = ChatGoogleGenerativeAI(
-        model="gemini-2.5-pro-preview-03-25",  # Using a generally available model, user had "gemini-2.0-flash-lite"
-        # api_key=gemini_api_key, # Handled by library if GOOGLE_API_KEY or GOOGLE_GEMINI_API_KEY env var is set
-        safety_settings=safety_settings,
-        temperature=0.1,  # For more factual, less creative answers
-        convert_system_message_to_human=True,  # Often useful for models that don't strongly differentiate system/human
+        model="gemini-2.5-pro-preview-03-25",
+        google_api_key=gemini_api_key,
+        temperature=0.1,
     )
 
     document_chain = create_stuff_documents_chain(llm, prompt)
 
     retriever = EnhancedBigQueryRetriever(
-        project_id=project_id,  # Consider making these configurable
+        project_id=project_id,
         region="EU",
         dataset="zenf_dataset",
         table=table_id,
         filter=filter,
-        k=k,  # Use the passed-in k for retriever
+        k=k,
     )
 
     retrieval_chain = create_retrieval_chain(retriever, document_chain)
+    print("LOG: Retrieval chain created with EnhancedBigQueryRetriever.")
+    print(f"LOG: Querying with k={k} and filter={filter}")
+    print(f"LOG: Query: {query}")
 
     try:
         response = retrieval_chain.invoke({"input": query})
+        print(response)
     except Exception as e:
         print(f"Error during retrieval_chain.invoke: {e}")
-        # Provide a fallback response or re-raise as appropriate
         return {
             "answer": "An error occurred while trying to answer the question. Please try again later.",
             "sources": [],
@@ -434,7 +427,6 @@ Answer:"""
             "retrieval_quality": {},
         }
 
-    # Enhanced response processing for sources
     sources_info = []
     retrieved_docs = response.get("context", [])
 
@@ -454,7 +446,7 @@ Answer:"""
                 avg_chunk_quality_sum += float(chunk_q)
                 valid_quality_scores += 1
             except ValueError:
-                pass  # Keep as N/A if not float
+                pass
 
         has_struct_data = metadata.get("has_structured_data", False)
         if has_struct_data:
