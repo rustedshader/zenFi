@@ -1,18 +1,26 @@
-FROM python:3.11-bookworm
-ENV PYTHONUNBUFFERED True
+FROM python:3.12-slim-bookworm
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
-# Upgrade pip and install dependencies
-RUN pip install --upgrade pip
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+WORKDIR /app
 
-# Set the app home directory and copy files
-ENV APP_HOME /home/rustedshader/gdg_hunterz/backend
-WORKDIR $APP_HOME
-COPY app $APP_HOME/app
+ENV UV_COMPILE_BYTECODE=1
 
-# Expose port 8000 (non-privileged)
+# Install system dependencies
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    build-essential libpq-dev gcc netcat-traditional \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy the rest of the application
+COPY . .
+
+RUN uv sync --frozen
+
+
+# Expose the port the app runs on
 EXPOSE 8000
 
-# Run Uvicorn on port 8000
-CMD ["uvicorn", "app.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONBUFFERED=1
+
+CMD ["sh", "-c", "uv run fastapi run --host 0.0.0.0 --port 8000"]

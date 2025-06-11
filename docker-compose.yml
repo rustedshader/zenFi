@@ -1,0 +1,97 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./config/backend.env
+    depends_on:
+      - some-postgres
+      - redis
+      - checkpoint-zenfi
+    volumes:
+      # - ./backend:/app  # Uncomment for development
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./logs/${COMPOSE_PROJECT_NAME:-default}_backend:/var/log/backend
+    restart: unless-stopped
+    command: 
+      - /bin/sh
+      - -c
+      - |
+        echo 'Waiting for database to be ready...' &&
+        while ! nc -z db 5432; do
+          sleep 1
+        done &&
+        echo 'Database is ready!' &&
+        echo 'Installing Google Vertex Ai Package' &&
+        uv pip install -U langchain-google-vertexai &&
+        uv run alembic upgrade head &&
+        echo "Starting FastAPI in production mode (no file watching)"
+        uv run fastapi run --host 0.0.0.0 --port 8000
+        fi
+    networks:
+      - app-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "80:3000"
+    volumes:
+      # - ./frontend:/app  # Uncomment for development
+    env_file:
+      - ./config/frontend.env
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - app-network
+
+  some-postgres:
+    image: postgres:15
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=mysecretpassword
+      - POSTGRES_DB=postgres
+    volumes:
+      - some_postgres:/var/lib/postgresql/data
+    restart: unless-stopped
+    networks:
+      - app-network
+
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    networks:
+      - app-network
+    
+  checkpoint-zenfi:
+    image: postgres:15
+    ports:
+      - "5434:5432"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=postgres
+    volumes:
+      - checkpoint_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
+volumes:
+  some_postgres:
+  redis_data:
+  checkpoint_data:

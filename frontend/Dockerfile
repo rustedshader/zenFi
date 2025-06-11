@@ -1,27 +1,33 @@
-# Base image
-FROM oven/bun:latest AS builder
+# Build stage
+FROM node:18-alpine AS builder
+
+# Install Python3 and build tools for Alpine
+RUN apk add --no-cache python3 make g++
 
 WORKDIR /app
 
-# Install dependencies (separated for better cache utilization)
-COPY package.json bun.lockb ./
-RUN bun install
+# Install dependencies
+COPY package.json package-lock.json ./
+RUN npm install --force
 
-# Copy source code and build
+# Copy the rest of the application
 COPY . .
-RUN bun next telemetry disable
-RUN bun run build
 
-# Runtime stage
-FROM oven/bun:latest AS runner
+# Build the application
+RUN npm run build
+
+# Production stage
+FROM node:18-alpine AS runner
+
 WORKDIR /app
 
-# Copy only necessary files from builder
-COPY --from=builder /app/.next ./.next
+# Copy only the standalone output and public folder
+COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/public ./public
-COPY --from=builder /app/package.json ./package.json
-COPY --from=builder /app/bun.lockb ./bun.lockb
-COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/.next/static ./.next/static
 
-# Start production server
-CMD ["bun", "start", "-H", "0.0.0.0"]
+# (Optional) Copy package.json if needed for runtime scripts
+COPY --from=builder /app/package.json ./package.json
+
+# Start the standalone server
+CMD ["node", "server.js"]
