@@ -7,28 +7,35 @@ services:
       - "8000:8000"
     env_file:
       - ./config/backend.env
+    volumes:
+      - ${HOME}/.config/gcloud/application_default_credentials.json:/app/service-account-key.json:ro
+    environment:
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/service-account-key.json
+      - GOOGLE_CLOUD_PROJECT=gdg-on-campus-challenge
     depends_on:
       - some-postgres
       - redis
       - checkpoint-zenfi
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
     restart: unless-stopped
     command: 
       - /bin/sh
       - -c
       - |
-        echo 'Waiting for database to be ready...' &&
-        while ! nc -z db 5432; do
+        echo 'Waiting for some-postgres (5432) and checkpoint-zenfi (5434) to be ready...' &&
+        while ! nc -z some-postgres 5432; do
           sleep 1
         done &&
-        echo 'Database is ready!' &&
+        while ! nc -z checkpoint-zenfi 5432; do
+          sleep 1
+        done &&
+        echo 'Both databases are ready!' &&
         echo 'Installing Google Vertex Ai Package' &&
         uv pip install -U langchain-google-vertexai &&
+        uv pip install psycopg2-binary &&
         uv run alembic upgrade head &&
-        echo "Starting FastAPI in production mode (no file watching)"
-        uv run fastapi run --host 0.0.0.0 --port 8000
-        fi
+        echo "Starting FastAPI in production mode (no file watching)" &&
+        export PYTHONPATH=/app &&
+        uv run fastapi run app/api/main.py --host 0.0.0.0 --port 8000
     networks:
       - app-network
 

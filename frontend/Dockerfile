@@ -1,23 +1,23 @@
 # Build stage
-FROM node:18-alpine AS builder
+FROM oven/bun:1-alpine AS builder
 
-# Install Python3 and build tools for Alpine
+# Install build tools for Alpine
 RUN apk add --no-cache python3 make g++
 
 WORKDIR /app
 
 # Install dependencies
-COPY package.json package-lock.json ./
-RUN npm install --force
+COPY package.json bun.lockb ./
+RUN bun install
 
 # Copy the rest of the application
 COPY . .
 
 # Build the application
-RUN npm run build
+RUN bun run build
 
 # Production stage
-FROM node:18-alpine AS runner
+FROM oven/bun:1-alpine AS runner
 
 WORKDIR /app
 
@@ -30,4 +30,4 @@ COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/package.json ./package.json
 
 # Start the standalone server
-CMD ["node", "server.js"]
+CMD ["bun", "server.js"]

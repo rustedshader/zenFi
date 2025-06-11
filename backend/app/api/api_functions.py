@@ -35,7 +35,7 @@ engine = create_async_engine(
         drivername="postgresql+asyncpg",
         username=os.environ.get("APP_DB_USER", "postgres"),
         password=os.environ.get("APP_DB_PASS", "mysecretpassword"),
-        host=os.environ.get("APP_INSTANCE_HOST", "localhost"),
+        host=os.environ.get("APP_INSTANCE_HOST", "postgres"),
         port=int(os.environ.get("APP_DB_PORT", "5432")),
         database=os.environ.get("APP_DB_NAME", "postgres"),
     ),
@@ -132,11 +132,18 @@ class ChatServiceManager:
                 model=quicksearch_llm,
             )
 
+    # DB_URI = "postgresql://postgres:postgres@localhost:5434/postgres"
     async def process_message(
         self, session_id: str, message: str, user_id: str
     ) -> ChatResponse:
         async with self.semaphore:
-            DB_URI = "postgresql://postgres:postgres@localhost:5434/postgres"
+            DB_URI = (
+                f"postgresql://{os.environ.get('CHECKPOINT_DB_USER', 'postgres')}:"
+                f"{os.environ.get('CHECKPOINT_DB_PASSWORD', 'postgres')}@"
+                f"{os.environ.get('CHECKPOINT_DB_HOST', 'checkpoint-zenfi')}:"
+                f"{os.environ.get('CHECKPOINT_DB_PORT', '5432')}/"
+                f"{os.environ.get('CHECKPOINT_DB_NAME', 'postgres')}"
+            )
             async with AsyncPostgresSaver.from_conn_string(DB_URI) as checkpointer:
                 await checkpointer.setup()
                 self.chat_services.build_graph(checkpointer=checkpointer)

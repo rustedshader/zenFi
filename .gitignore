@@ -6,3 +6,9 @@ source_documents/
 test_documents/
 __pycache__/
 knowledge_base_db/
+config/*
+*.env
+backend.env
+frontend.env
+config/backend.env
+config/frontend.env
