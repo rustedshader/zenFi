@@ -15,6 +15,7 @@ import {
 import { Moon, Sun, Search, Activity, Clock, MessageCircle } from 'lucide-react'
 import { useTheme } from 'next-themes'
 import Image from 'next/image'
+import ZenfiLogo from '@/public/zenfi_logo.png'
 
 interface Stock {
   exchange: string
@@ -188,7 +189,7 @@ export default function Header() {
             <Link href="/" className="flex items-center gap-3">
               <span className="relative h-10 w-10">
                 <Image
-                  src="/zenfi_logo.png"
+                  src={ZenfiLogo}
                   alt="zenfi_logo"
                   fill
                   priority

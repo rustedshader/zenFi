@@ -7,6 +7,7 @@ import MarketOverview from '@/components/homepage/market-overview'
 import PinnedStocks from '@/components/homepage/pinned-stocks'
 import HomeSearch from '@/components/homepage/home-search'
 import Image from 'next/image'
+import ZenfiLogo from '@/public/zenfi_logo.png'
 
 export default function Page() {
   const [error, setError] = useState<string | null>(null)
@@ -64,7 +65,7 @@ export default function Page() {
                 <div className="text-center mb-6">
                   <div className="flex items-center justify-center mb-3 space-x-3">
                     <Image
-                      src="/zenfi_logo.png"
+                      src={ZenfiLogo}
                       alt="zenfi_logo"
                       height={40}
                       width={40}
