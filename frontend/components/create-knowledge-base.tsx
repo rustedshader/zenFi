@@ -100,15 +100,6 @@ function CreateKnowledgeBaseForm({ onCreate }: { onCreate: () => void }) {
               onChange={e => setDescription(e.target.value)}
             />
           </div>
-          <div>
-            <Label htmlFor="metaData">Meta Data (JSON)</Label>
-            <Textarea
-              id="metaData"
-              value={metaData}
-              onChange={e => setMetaData(e.target.value)}
-              placeholder='{"key": "value"}'
-            />
-          </div>
           <Button type="submit">Create</Button>
         </form>
       </DialogContent>
@@ -144,9 +135,7 @@ export default function KnowledgeBase() {
       <Accordion type="single" collapsible className="mb-6">
         <AccordionItem value="item-1">
           <AccordionTrigger>
-            <div className="flex gap-3">
-              About Financial Knowledge Base <Eye />
-            </div>
+            <div className="flex gap-3">About Financial Knowledge Base</div>
           </AccordionTrigger>
           <AccordionContent>
             The Financial Knowledge Base allows you to upload and organize your

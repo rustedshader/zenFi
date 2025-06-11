@@ -116,6 +116,7 @@ export default function PortfolioDetails() {
   const [error, setError] = useState<string | null>(null)
   const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null)
   const [isAddAssetOpen, setIsAddAssetOpen] = useState(false)
+  const [isAddingAsset, setIsAddingAsset] = useState(false) // New state for adding asset loading
   const [newAsset, setNewAsset] = useState<NewAsset>({
     asset_type: 'Stock',
     identifier: '',
@@ -340,6 +341,7 @@ export default function PortfolioDetails() {
       return
     }
 
+    setIsAddingAsset(true) // Set loading state
     const assetData = {
       portfolio_id: portfolioId,
       asset_type: newAsset.asset_type,
@@ -382,6 +384,8 @@ export default function PortfolioDetails() {
     } catch (error) {
       console.error(error)
       toast.error('Failed to add asset')
+    } finally {
+      setIsAddingAsset(false) // Reset loading state
     }
   }
 
@@ -849,112 +853,136 @@ export default function PortfolioDetails() {
             <DialogHeader>
               <DialogTitle>Add New Asset</DialogTitle>
             </DialogHeader>
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="asset_type">Asset Type</Label>
-                <Select
-                  value={newAsset.asset_type}
-                  onValueChange={value =>
-                    setNewAsset({ ...newAsset, asset_type: value })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select asset type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Stock">Stock</SelectItem>
-                    <SelectItem value="Bond">Bond</SelectItem>
-                    <SelectItem value="Other">Other</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+            <div className="relative">
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="asset_type">Asset Type</Label>
+                  <Select
+                    value={newAsset.asset_type}
+                    onValueChange={value =>
+                      setNewAsset({ ...newAsset, asset_type: value })
+                    }
+                    disabled={isAddingAsset}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select asset type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Stock">Stock</SelectItem>
+                      <SelectItem value="Bond">Bond</SelectItem>
+                      <SelectItem value="Other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
 
-              <div>
-                <Label htmlFor="identifier">Stock Symbol</Label>
-                <div className="relative">
-                  <Input
-                    id="identifier"
-                    value={stockSearch}
-                    onChange={e => setStockSearch(e.target.value)}
-                    placeholder="Search stocks (e.g., RELIANCE, NVIDIA)"
-                    className="pl-10"
-                  />
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  {isSearchDropdownOpen && searchResults.length > 0 && (
-                    <Card className="absolute z-50 w-full mt-1 border rounded-md shadow-lg max-h-60 overflow-y-auto">
-                      {isSearchLoading ? (
-                        <div className="p-4 text-center">
-                          <div className="animate-spin rounded-full h-4 w-4 border-2 border-primary border-t-transparent mx-auto"></div>
-                        </div>
-                      ) : (
-                        searchResults.map(stock => (
-                          <div
-                            key={stock.symbol}
-                            className="p-3 hover:bg-accent cursor-pointer border-b last:border-b-0"
-                            onClick={() => handleStockSelect(stock)}
-                          >
-                            <div className="flex justify-between items-start">
-                              <span className="font-semibold">
-                                {stock.symbol}
-                              </span>
-                              <span className="text-xs bg-secondary px-2 py-1 rounded">
-                                {stock.exchDisp}
-                              </span>
-                            </div>
-                            <div className="text-sm text-muted-foreground mt-1">
-                              {stock.longname}
-                            </div>
-                            {stock.sector && stock.industry && (
-                              <div className="text-xs text-muted-foreground mt-1">
-                                {stock.sector} • {stock.industry}
-                              </div>
-                            )}
+                <div>
+                  <Label htmlFor="identifier">Stock Symbol</Label>
+                  <div className="relative">
+                    <Input
+                      id="identifier"
+                      value={stockSearch}
+                      onChange={e => setStockSearch(e.target.value)}
+                      placeholder="Search stocks (e.g., RELIANCE, NVIDIA)"
+                      className="pl-10"
+                      disabled={isAddingAsset}
+                    />
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    {isSearchDropdownOpen && searchResults.length > 0 && (
+                      <Card className="absolute z-50 w-full mt-1 border rounded-md shadow-lg max-h-60 overflow-y-auto">
+                        {isSearchLoading ? (
+                          <div className="p-4 text-center">
+                            <div className="animate-spin rounded-full h-4 w-4 border-2 border-primary border-t-transparent mx-auto"></div>
                           </div>
-                        ))
-                      )}
-                    </Card>
-                  )}
+                        ) : (
+                          searchResults.map(stock => (
+                            <div
+                              key={stock.symbol}
+                              className="p-3 hover:bg-accent cursor-pointer border-b last:border-b-0"
+                              onClick={() => handleStockSelect(stock)}
+                            >
+                              <div className="flex justify-between items-start">
+                                <span className="font-semibold">
+                                  {stock.symbol}
+                                </span>
+                                <span className="text-xs bg-secondary px-2 py-1 rounded">
+                                  {stock.exchDisp}
+                                </span>
+                              </div>
+                              <div className="text-sm text-muted-foreground mt-1">
+                                {stock.longname}
+                              </div>
+                              {stock.sector && stock.industry && (
+                                <div className="text-xs text-muted-foreground mt-1">
+                                  {stock.sector} • {stock.industry}
+                                </div>
+                              )}
+                            </div>
+                          ))
+                        )}
+                      </Card>
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <Label htmlFor="quantity">Quantity</Label>
+                  <Input
+                    id="quantity"
+                    type="number"
+                    value={newAsset.quantity}
+                    onChange={e =>
+                      setNewAsset({ ...newAsset, quantity: e.target.value })
+                    }
+                    placeholder="e.g., 10"
+                    disabled={isAddingAsset}
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="purchase_price">Purchase Price (₹)</Label>
+                  <Input
+                    id="purchase_price"
+                    type="number"
+                    step="0.01"
+                    value={newAsset.purchase_price}
+                    onChange={e =>
+                      setNewAsset({
+                        ...newAsset,
+                        purchase_price: e.target.value
+                      })
+                    }
+                    placeholder="e.g., 2500.00"
+                    disabled={isAddingAsset}
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="purchase_date">Purchase Date</Label>
+                  <Input
+                    id="purchase_date"
+                    type="date"
+                    value={newAsset.purchase_date}
+                    onChange={e =>
+                      setNewAsset({
+                        ...newAsset,
+                        purchase_date: e.target.value
+                      })
+                    }
+                    disabled={isAddingAsset}
+                  />
                 </div>
               </div>
 
-              <div>
-                <Label htmlFor="quantity">Quantity</Label>
-                <Input
-                  id="quantity"
-                  type="number"
-                  value={newAsset.quantity}
-                  onChange={e =>
-                    setNewAsset({ ...newAsset, quantity: e.target.value })
-                  }
-                  placeholder="e.g., 10"
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="purchase_price">Purchase Price (₹)</Label>
-                <Input
-                  id="purchase_price"
-                  type="number"
-                  step="0.01"
-                  value={newAsset.purchase_price}
-                  onChange={e =>
-                    setNewAsset({ ...newAsset, purchase_price: e.target.value })
-                  }
-                  placeholder="e.g., 2500.00"
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="purchase_date">Purchase Date</Label>
-                <Input
-                  id="purchase_date"
-                  type="date"
-                  value={newAsset.purchase_date}
-                  onChange={e =>
-                    setNewAsset({ ...newAsset, purchase_date: e.target.value })
-                  }
-                />
-              </div>
+              {isAddingAsset && (
+                <div className="absolute inset-0 bg-background/80 flex items-center justify-center">
+                  <div className="flex flex-col items-center space-y-2">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                    <p className="text-sm text-muted-foreground">
+                      Adding asset and generating AI summary...
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
             <div className="mt-6 flex justify-end space-x-2">
               <Button
@@ -965,10 +993,13 @@ export default function PortfolioDetails() {
                   setSearchResults([])
                   setIsSearchDropdownOpen(false)
                 }}
+                disabled={isAddingAsset}
               >
                 Cancel
               </Button>
-              <Button onClick={handleAddAsset}>Add Asset</Button>
+              <Button onClick={handleAddAsset} disabled={isAddingAsset}>
+                Add Asset
+              </Button>
             </div>
           </DialogContent>
         </Dialog>

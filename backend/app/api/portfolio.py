@@ -275,6 +275,7 @@ async def get_portfolio(
             total_day_gain_inr=total_day_gain_base,
             total_gain_inr=total_gain_base,
             assets=assets_details,
+            user_id=current_user.id,
         )
 
         portfolio_response = {

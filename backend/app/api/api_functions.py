@@ -211,6 +211,7 @@ async def generate_ai_portfolio_summary(
     total_day_gain_inr: float,
     total_gain_inr: float,
     assets: List[Dict],
+    user_id: int,
 ) -> str:
     cc = ChatServiceManager()
 
@@ -240,7 +241,7 @@ async def generate_ai_portfolio_summary(
     """
 
     portfolio_summary_service = cc.stream_message(
-        session_id="", isDeepSearch=False, message=input_prompt, user_id=""
+        session_id="", isDeepSearch=False, message=input_prompt, user_id=user_id
     )
     summary = ""
     async for chunk in portfolio_summary_service:

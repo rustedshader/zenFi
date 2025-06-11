@@ -202,8 +202,8 @@ export default function KnowledgeBasePage() {
             {isSettingDefault
               ? 'Setting...'
               : knowledgeBaseInfo.is_default
-                ? 'Default'
-                : 'Set as Default'}
+              ? 'Default'
+              : 'Set as Default'}
           </Button>
         </CardHeader>
         <CardContent>
@@ -213,23 +213,27 @@ export default function KnowledgeBasePage() {
               <Input id="knowledge_base_id" value={id} disabled className="" />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="chunk_size">Chunk Size (optional)</Label>
+              <Label htmlFor="chunk_size">
+                Chunk Size (optional) (Coming Soon)
+              </Label>
               <Input
                 id="chunk_size"
                 type="number"
                 value={chunkSize}
                 onChange={e => setChunkSize(e.target.value)}
                 placeholder="Enter chunk size"
+                disabled
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="overlap">Overlap (optional)</Label>
+              <Label htmlFor="overlap">Overlap (optional) (Coming Soon)</Label>
               <Input
                 id="overlap"
                 type="number"
                 value={overlap}
                 onChange={e => setOverlap(e.target.value)}
                 placeholder="Enter overlap"
+                disabled
               />
             </div>
             <div className="space-y-2">

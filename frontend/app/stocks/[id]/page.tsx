@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { toast } from 'sonner'
+import dynamic from 'next/dynamic'
 import {
   ArrowUp,
   ArrowDown,
@@ -29,11 +30,15 @@ import {
   ExternalLink,
   Info,
   Newspaper,
-  LineChart, // NEW: Import LineChart icon
-  CandlestickChart // NEW: Import CandlestickChart icon
+  LineChart,
+  CandlestickChart
 } from 'lucide-react'
-import Chart from 'react-apexcharts'
 import { ApexOptions } from 'apexcharts'
+
+// Dynamically import Chart with SSR disabled
+const Chart = dynamic(() => import('react-apexcharts'), {
+  ssr: false
+})
 
 // Interfaces remain the same
 interface ChartDataPoint {
@@ -134,7 +139,6 @@ export default function StockPage() {
   const [error, setError] = useState<string | null>(null)
   const [isPinned, setIsPinned] = useState(false)
   const [chartData, setChartData] = useState<ChartDataPoint[]>([])
-  // NEW: State to manage the current chart type
   const [chartType, setChartType] = useState<'line' | 'candlestick'>(
     'candlestick'
   )
@@ -177,7 +181,6 @@ export default function StockPage() {
     fetchStockInfo()
   }, [symbol])
 
-  // Helper functions (parseChartData, formatCurrency, etc.) remain the same
   const parseChartData = (
     chartsData: string,
     symbol: string
@@ -253,29 +256,20 @@ export default function StockPage() {
     }
   }
 
-  // --- MODIFIED: Chart options are now dynamic ---
   const chartOptions: ApexOptions = {
     chart: {
       id: 'stock-price-chart',
-      type: chartType, // Use state for chart type
+      type: chartType,
       height: 400,
-      toolbar: {
-        show: true
-      }
+      toolbar: { show: true }
     },
     xaxis: {
       type: 'datetime',
-      labels: {
-        format: 'MMM dd'
-      },
-      title: {
-        text: 'Date'
-      }
+      labels: { format: 'MMM dd' },
+      title: { text: 'Date' }
     },
     yaxis: {
-      title: {
-        text: 'Price'
-      },
+      title: { text: 'Price' },
       labels: {
         formatter: (value: number) =>
           formatCurrency(value, stockInfo?.stock_information.currency)
@@ -290,22 +284,18 @@ export default function StockPage() {
       }
     },
     tooltip: {
-      x: {
-        format: 'dd MMM yyyy'
-      },
+      x: { format: 'dd MMM yyyy' },
       y: {
         formatter: (value: number) =>
           formatCurrency(value, stockInfo?.stock_information.currency)
       }
     },
     stroke: {
-      // Add stroke for line chart
       curve: 'smooth',
       width: chartType === 'line' ? 2 : 1
     }
   }
 
-  // --- MODIFIED: Chart series data is now dynamic based on chart type ---
   const chartSeries =
     chartType === 'candlestick'
       ? [
@@ -322,13 +312,12 @@ export default function StockPage() {
             name: 'Close Price',
             data: chartData.map(data => ({
               x: data.timestamp,
-              y: data.close.toFixed(2) // Line chart uses only one value for y
+              y: data.close.toFixed(2)
             }))
           }
         ]
 
   if (isLoading) {
-    // Loading skeleton remains the same
     return (
       <div className="min-h-screen">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -351,7 +340,6 @@ export default function StockPage() {
   }
 
   if (error || !stockInfo) {
-    // Error handling remains the same
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center space-y-4">
@@ -372,8 +360,7 @@ export default function StockPage() {
 
   return (
     <div className="min-h-screen">
-      {/* Header section remains the same */}
-      <div className="sticky">
+      <div className="sticky top-0 bg-background z-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
@@ -422,14 +409,12 @@ export default function StockPage() {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* --- MODIFIED: Price History Chart Card --- */}
         <Card className="shadow-sm border-0 mb-8">
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="flex items-center">
               <TrendingUp className="h-5 w-5 mr-2" />
               Price History
             </CardTitle>
-            {/* NEW: Buttons to switch chart type */}
             <div className="flex items-center space-x-2">
               <Button
                 variant={chartType === 'line' ? 'default' : 'outline'}
@@ -455,7 +440,7 @@ export default function StockPage() {
                 <Chart
                   options={chartOptions}
                   series={chartSeries}
-                  type={chartType} // Pass the dynamic type here as well
+                  type={chartType}
                   height="100%"
                 />
               </div>
@@ -465,11 +450,8 @@ export default function StockPage() {
           </CardContent>
         </Card>
 
-        {/* The rest of the page layout remains the same */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Main Content */}
           <div className="lg:col-span-2 space-y-6">
-            {/* Price Card */}
             <Card className="shadow-sm border-0">
               <CardContent className="p-6">
                 <div className="flex items-center justify-between mb-6">
@@ -571,7 +553,6 @@ export default function StockPage() {
               </CardContent>
             </Card>
 
-            {/* Key Statistics Card */}
             <Card className="shadow-sm border">
               <CardHeader>
                 <CardTitle className="flex items-center">
@@ -660,12 +641,209 @@ export default function StockPage() {
               </CardContent>
             </Card>
 
-            {/* Other cards (Company Overview, News) remain the same */}
+            {stock.longBusinessSummary && (
+              <Card className="shadow-sm border">
+                <CardHeader>
+                  <CardTitle className="flex items-center">
+                    <Info className="h-5 w-5 mr-2" />
+                    Company Overview
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="leading-relaxed">{stock.longBusinessSummary}</p>
+                  {(stock.industry || stock.sector) && (
+                    <div className="flex items-center space-x-4 mt-4 pt-4 border-t">
+                      {stock.sector && (
+                        <Badge
+                          variant="secondary"
+                          className="flex items-center"
+                        >
+                          <Briefcase className="h-3 w-3 mr-1" />
+                          {stock.sector}
+                        </Badge>
+                      )}
+                      {stock.industry && (
+                        <Badge variant="outline" className="flex items-center">
+                          <Building className="h-3 w-3 mr-1" />
+                          {stock.industry}
+                        </Badge>
+                      )}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
+            {stockInfo.news?.data?.tickerStream?.stream?.length > 0 && (
+              <Card className="shadow-sm border">
+                <CardHeader>
+                  <CardTitle className="flex items-center">
+                    <Newspaper className="h-5 w-5 mr-2" />
+                    Latest News
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-6">
+                    {stockInfo.news.data.tickerStream.stream
+                      .slice(0, 5)
+                      .map((newsItem, index) => (
+                        <div key={index} className="flex space-x-4">
+                          {newsItem.content.thumbnail?.resolutions[0]?.url && (
+                            <img
+                              src={
+                                newsItem.content.thumbnail.resolutions[0].url
+                              }
+                              alt={newsItem.content.title}
+                              className="w-24 h-16 object-cover rounded"
+                            />
+                          )}
+                          <div>
+                            <h3 className="text-sm font-medium">
+                              {newsItem.content.title}
+                            </h3>
+                            <p className="text-xs text-gray-500">
+                              {newsItem.content.summary}
+                            </p>
+                            <a
+                              href={newsItem.content.canonicalUrl.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs text-blue-600 hover:underline"
+                            >
+                              Read more
+                            </a>
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </div>
 
-          {/* Sidebar */}
-          <div className="space-y-6 border rounded">
-            {/* Sidebar cards (Analyst Recommendations, etc.) remain the same */}
+          <div className="space-y-6">
+            {stock.recommendationKey && (
+              <Card className="shadow-sm border-0">
+                <CardHeader>
+                  <CardTitle className="flex items-center">
+                    <Target className="h-5 w-5 mr-2" />
+                    Analyst Rating
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="text-center">
+                    <Badge
+                      className={`text-lg px-4 py-2 ${getRecommendationColor(
+                        stock.recommendationKey
+                      )}`}
+                    >
+                      {stock.recommendationKey.replace('_', ' ').toUpperCase()}
+                    </Badge>
+                    {stock.numberOfAnalystOpinions && (
+                      <p className="text-sm text-gray-500 mt-2">
+                        Based on {stock.numberOfAnalystOpinions} analyst
+                        opinions
+                      </p>
+                    )}
+                  </div>
+                  {stock.targetMeanPrice && (
+                    <div className="space-y-2">
+                      <div className="flex justify-between">
+                        <span className="text-sm">Price Target</span>
+                        <span className="font-medium">
+                          {formatCurrency(
+                            stock.targetMeanPrice,
+                            stock.currency
+                          )}
+                        </span>
+                      </div>
+                      {stock.targetHighPrice && stock.targetLowPrice && (
+                        <div className="text-xs">
+                          Range:{' '}
+                          {formatCurrency(stock.targetLowPrice, stock.currency)}{' '}
+                          -{' '}
+                          {formatCurrency(
+                            stock.targetHighPrice,
+                            stock.currency
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
+            <Card className="shadow-sm border-0">
+              <CardHeader>
+                <CardTitle className="flex items-center">
+                  <Building className="h-5 w-5 mr-2" />
+                  Company Details
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {(stock.address1 || stock.city || stock.country) && (
+                  <div className="flex items-start space-x-2">
+                    <MapPin className="h-4 w-4 mt-0.5" />
+                    <div className="text-sm">
+                      {stock.address1 && <div>{stock.address1}</div>}
+                      {stock.address2 && <div>{stock.address2}</div>}
+                      <div>
+                        {[stock.city, stock.country].filter(Boolean).join(', ')}
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {stock.phone && (
+                  <div className="flex items-center space-x-2">
+                    <Phone className="h-4 w-4" />
+                    <span className="text-sm">{stock.phone}</span>
+                  </div>
+                )}
+                {stock.website && (
+                  <div className="flex items-center space-x-2">
+                    <Globe className="h-4 w-4 text-gray-400" />
+                    <a
+                      href={stock.website}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm text-blue-600 hover:underline"
+                    >
+                      {stock.website.replace(/(^\w+:|^)\/\//, '')}
+                    </a>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {stock.companyOfficers && stock.companyOfficers.length > 0 && (
+              <Card className="shadow-sm border-0">
+                <CardHeader>
+                  <CardTitle className="flex items-center">
+                    <Users className="h-5 w-5 mr-2" />
+                    Key Executives
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {stock.companyOfficers.slice(0, 5).map((officer, index) => (
+                      <div
+                        key={index}
+                        className="flex justify-between items-start"
+                      >
+                        <div>
+                          <p className="font-medium text-sm">{officer.name}</p>
+                          <p className="text-xs">{officer.title}</p>
+                        </div>
+                        {officer.age && (
+                          <span className="text-xs">Age {officer.age}</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </div>
         </div>
       </div>
