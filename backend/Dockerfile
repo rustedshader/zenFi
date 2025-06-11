@@ -5,9 +5,9 @@ WORKDIR /app
 
 ENV UV_COMPILE_BYTECODE=1
 
-# Install system dependencies
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
+# Install system dependencies with GPG verification disabled
+RUN apt-get update --allow-unauthenticated && \
+    apt-get install -y --no-install-recommends --allow-unauthenticated \
     build-essential libpq-dev gcc netcat-traditional \
     && rm -rf /var/lib/apt/lists/*
 
@@ -15,7 +15,6 @@ RUN apt-get update && \
 COPY . .
 
 RUN uv sync --frozen
-
 
 # Expose the port the app runs on
 EXPOSE 8000
