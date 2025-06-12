@@ -1,8 +1,8 @@
-"""Updated Portfolio
+"""Initial migration
 
-Revision ID: 20c7be06c503
+Revision ID: f8c8d0529745
 Revises: 
-Create Date: 2025-05-29 18:03:17.304895
+Create Date: 2025-06-12 16:29:59.406519
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = '20c7be06c503'
+revision: str = 'f8c8d0529745'
 down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -59,22 +59,56 @@ def upgrade() -> None:
     sa.Column('id', sa.UUID(), nullable=False),
     sa.Column('user_id', sa.Integer(), nullable=True),
     sa.Column('created_at', sa.DateTime(timezone=True), nullable=True),
+    sa.Column('summary', sa.String(), nullable=True),
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_chat_sessions_id'), 'chat_sessions', ['id'], unique=False)
+    op.create_table('knowledge_bases',
+    sa.Column('id', sa.UUID(), nullable=False),
+    sa.Column('user_id', sa.Integer(), nullable=False),
+    sa.Column('name', sa.String(), nullable=False),
+    sa.Column('description', sa.String(), nullable=True),
+    sa.Column('meta_data', sa.JSON(), nullable=True),
+    sa.Column('table_id', sa.String(), nullable=False),
+    sa.Column('is_default', sa.Boolean(), nullable=False),
+    sa.Column('created_at', sa.DateTime(timezone=True), nullable=True),
+    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
+    sa.PrimaryKeyConstraint('id'),
+    sa.UniqueConstraint('table_id'),
+    sa.UniqueConstraint('user_id', 'name', name='uq_user_knowledge_base_name')
+    )
+    op.create_index(op.f('ix_knowledge_bases_id'), 'knowledge_bases', ['id'], unique=False)
+    op.create_index(op.f('ix_knowledge_bases_name'), 'knowledge_bases', ['name'], unique=False)
+    op.create_index(op.f('ix_knowledge_bases_user_id'), 'knowledge_bases', ['user_id'], unique=False)
+    op.create_index('uq_one_default_knowledge_base_per_user', 'knowledge_bases', ['user_id'], unique=True, postgresql_where=sa.text('is_default'))
     op.create_table('portfolios',
     sa.Column('id', sa.UUID(), nullable=False),
     sa.Column('user_id', sa.Integer(), nullable=False),
     sa.Column('name', sa.String(), nullable=False),
     sa.Column('description', sa.String(), nullable=True),
     sa.Column('gcs_document_link', sa.String(), nullable=True),
+    sa.Column('is_default', sa.Boolean(), nullable=False),
     sa.Column('created_at', sa.DateTime(timezone=True), nullable=True),
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_portfolios_id'), 'portfolios', ['id'], unique=False)
     op.create_index(op.f('ix_portfolios_name'), 'portfolios', ['name'], unique=False)
+    op.create_table('refresh_tokens',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('token', sa.String(), nullable=False),
+    sa.Column('expires_at', sa.DateTime(timezone=True), nullable=False),
+    sa.Column('user_id', sa.Integer(), nullable=False),
+    sa.Column('is_valid', sa.Boolean(), nullable=False),
+    sa.Column('usage_count', sa.Integer(), nullable=False),
+    sa.Column('created_at', sa.DateTime(timezone=True), nullable=True),
+    sa.Column('last_used_at', sa.DateTime(timezone=True), nullable=True),
+    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index(op.f('ix_refresh_tokens_id'), 'refresh_tokens', ['id'], unique=False)
+    op.create_index(op.f('ix_refresh_tokens_token'), 'refresh_tokens', ['token'], unique=True)
     op.create_table('stocks',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('user_id', sa.Integer(), nullable=False),
@@ -142,9 +176,17 @@ def downgrade() -> None:
     op.drop_index(op.f('ix_stocks_symbol'), table_name='stocks')
     op.drop_index(op.f('ix_stocks_id'), table_name='stocks')
     op.drop_table('stocks')
+    op.drop_index(op.f('ix_refresh_tokens_token'), table_name='refresh_tokens')
+    op.drop_index(op.f('ix_refresh_tokens_id'), table_name='refresh_tokens')
+    op.drop_table('refresh_tokens')
     op.drop_index(op.f('ix_portfolios_name'), table_name='portfolios')
     op.drop_index(op.f('ix_portfolios_id'), table_name='portfolios')
     op.drop_table('portfolios')
+    op.drop_index('uq_one_default_knowledge_base_per_user', table_name='knowledge_bases', postgresql_where=sa.text('is_default'))
+    op.drop_index(op.f('ix_knowledge_bases_user_id'), table_name='knowledge_bases')
+    op.drop_index(op.f('ix_knowledge_bases_name'), table_name='knowledge_bases')
+    op.drop_index(op.f('ix_knowledge_bases_id'), table_name='knowledge_bases')
+    op.drop_table('knowledge_bases')
     op.drop_index(op.f('ix_chat_sessions_id'), table_name='chat_sessions')
     op.drop_table('chat_sessions')
     op.drop_index(op.f('ix_bank_accounts_id'), table_name='bank_accounts')
