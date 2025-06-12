@@ -1,0 +1,77 @@
+// Zenfi AI Full Stack Architecture
+digraph {
+	graph [bgcolor="#fafafa" fontcolor="#333333" fontname="Helvetica, Arial, sans-serif" fontsize=24 label="Zenfi AI Full Stack Architecture" labelloc=t rankdir=TB splines=ortho]
+	node [fontname="Helvetica, Arial, sans-serif" fontsize=12 shape=box style="filled,rounded"]
+	edge [color="#555555" fontname="Helvetica, Arial, sans-serif" fontsize=10]
+	user [label=User fillcolor="#cce5ff" fontcolor="#004085" shape=circle style=filled]
+	subgraph cluster_frontend {
+		bgcolor="#f0faff" color="#e6f7ff" label="Frontend (Next.js)" style=filled
+		nextjs_ui [label="React Components
+(Chat UI, Portfolio, Watchlist, KB)" fillcolor="#d1f0ff"]
+		nextjs_api [label="Next.js API Routes
+(BFF - Backend for Frontend)" fillcolor="#a3daff"]
+	}
+	subgraph cluster_backend {
+		bgcolor="#f0fff0" color="#e6ffe6" label="Backend (FastAPI)" style=filled
+		fastapi_gateway [label="FastAPI Gateway
+(OAuth2, Routers)" fillcolor="#c2f0c2"]
+		subgraph cluster_ai_core {
+			bgcolor="#fff5f0" color="#fff0e6" label="AI Core (Langchain & LangGraph)" style=filled
+			subgraph cluster_chat_service {
+				color="#ffe0cc" label="ChatService (Quick Search)" style=filled
+				chat_service_graph [label="LangGraph State Machine
+(AppState)" fillcolor="#ffccb3" shape=Mdiamond]
+				chat_service_logic [label="Conditional Routing:
+- Portfolio Check
+- Knowledge Base Check
+- Python Code Check
+- Web Search Check" fillcolor="#ffccb3" shape=rect]
+			}
+			subgraph cluster_deep_search {
+				color="#ffe0cc" label="DeepSearchService (Report Generation)" style=filled
+				deep_search_graph [label="LangGraph State Machine
+(ReportState)" fillcolor="#ffccb3" shape=Mdiamond]
+				deep_search_logic [label="Report Generation Flow:
+1. Plan Report
+2. Dispatch Sections
+3. Research & Write
+4. Compile Final Report" fillcolor="#ffccb3" shape=rect]
+			}
+			tools [label=<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4"><TR><TD COLSPAN="2" BGCOLOR="#e0e0e0"><B>Agent Tools</B></TD></TR><TR><TD ALIGN="LEFT" BGCOLOR="#f2f2f2"><B>Web and News Search</B></TD><TD ALIGN="LEFT">• google_search_tool<br/>• brave_search_tool<br/>• duckduckgo_search_run_tool<br/>• duckduckgo_search_results_tool<br/>• yahoo_finance_news_tool<br/>• duckduckgo_news_search_tool<br/>• fetch_finance_news</TD></TR><TR><TD ALIGN="LEFT" BGCOLOR="#f2f2f2"><B>Financial Data</B></TD><TD ALIGN="LEFT">• get_stock_currency<br/>• get_stock_day_high/low<br/>• get_stock_exchange<br/>• get_stock_fifty_day_average<br/>• get_stock_last_price/volume<br/>• get_stock_market_cap<br/>• get_stock_info<br/>• get_stock_history<br/>• get_stock_income_statement<br/>• get_stock_options_chain<br/>• get_stock_price_change</TD></TR><TR><TD ALIGN="LEFT" BGCOLOR="#f2f2f2"><B>Retrieval-Augmented Generation (RAG)</B></TD><TD ALIGN="LEFT">• get_user_portfolio_tool (RAG)<br/>• query_knowledge_base (RAG)</TD></TR><TR><TD ALIGN="LEFT" BGCOLOR="#f2f2f2"><B>Utility and Execution</B></TD><TD ALIGN="LEFT">• get_current_datetime<br/>• youtube_search_tool<br/>• python_sandbox_tool</TD></TR></TABLE>> fillcolor="#ffffff" shape=plaintext]
+		}
+	}
+	subgraph cluster_data_services {
+		bgcolor="#f5f0ff" color="#f2e6ff" label="Data Stores & External Services" style=filled
+		postgres_primary [label="PostgreSQL
+(Users, Portfolios, Chat History)" fillcolor="#e0ccff" shape=cylinder]
+		postgres_checkpoint [label="PostgreSQL
+(LangGraph Checkpoints)" fillcolor="#e0ccff" shape=cylinder]
+		redis [label="Redis
+(API Caching)" fillcolor="#e0ccff" shape=cylinder]
+		bigquery [label="Google BigQuery
+(Vector Store for RAG)" fillcolor="#e0ccff" shape=cylinder]
+		gemini [label="Google Gemini API
+(LLM)" fillcolor="#d6b3ff" shape=ellipse]
+		external_apis [label="External APIs
+(Yahoo Finance, Search, etc.)" fillcolor="#d6b3ff" shape=ellipse]
+	}
+	user -> nextjs_ui [xlabel="Interacts with"]
+	nextjs_ui -> nextjs_api [xlabel="API Calls"]
+	nextjs_api -> fastapi_gateway [xlabel="HTTP Requests"]
+	fastapi_gateway -> chat_service_graph [xlabel="Routes to Quick Search"]
+	fastapi_gateway -> deep_search_graph [xlabel="Routes to Deep Search"]
+	chat_service_graph -> chat_service_logic [xlabel=Executes]
+	chat_service_logic -> gemini [xlabel="Calls LLM for decisions"]
+	chat_service_logic -> tools [xlabel="Uses Tools if needed"]
+	deep_search_graph -> deep_search_logic [xlabel=Executes]
+	deep_search_logic -> gemini [xlabel="Calls LLM for planning/writing"]
+	deep_search_logic -> tools [xlabel="Uses Tools for research"]
+	tools -> external_apis [xlabel="API Calls"]
+	tools -> bigquery [xlabel="RAG Query"]
+	tools -> postgres_primary [xlabel="Portfolio Query"]
+	fastapi_gateway -> postgres_primary [xlabel="CRUD Operations"]
+	fastapi_gateway -> redis [style=dashed xlabel="Cache Get/Set"]
+	chat_service_graph -> postgres_checkpoint [style=dashed xlabel="Saves State"]
+	deep_search_graph -> postgres_checkpoint [style=dashed xlabel="Saves State"]
+	fastapi_gateway -> bigquery [style=dashed xlabel="Ingests Docs"]
+}
