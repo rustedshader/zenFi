@@ -369,7 +369,7 @@ class ChatService:
                 result = await db.execute(stmt)
                 portfolios = result.scalars().all()
                 if not portfolios:
-                    return "No default portfolio found for this user."
+                    return {"portfolio_data": ""}
 
                 output_lines = []
                 for portfolio in portfolios:

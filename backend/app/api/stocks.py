@@ -9,9 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config.config import redis_url
 from app.api.api_functions import get_current_user, get_db
 from app.api.api_models import StockInput, StockSearchInput, User
-from app.chat_provider.tools.finance_tools import get_stock_info
 from app.chat_provider.tools.news_tools import fetch_finance_news
-from app.chat_provider.extra_functions.charts import get_charts_data
+from app.chat_provider.extra_functions.charts import get_charts_data, get_stock_info
 
 stock_router = APIRouter(prefix="/stocks")
 

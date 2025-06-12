@@ -1,0 +1,93 @@
+// Zenfi AI Process Flow
+digraph {
+	graph [bgcolor="#fdfdfd" concentrate=true fontname="Helvetica, Arial, sans-serif" fontsize=24 label="Zenfi AI: User Request Process Flow" labelloc=t rankdir=TB splines=ortho]
+	node [fontname="Helvetica, Arial, sans-serif" fontsize=11 style="filled,rounded"]
+	edge [color="#444444" fontname="Helvetica, Arial, sans-serif" fontsize=9]
+	subgraph cluster_legend {
+		color=lightgrey label=Legend style=rounded
+		user_action_key [label="User Action" color="#007acc" fillcolor="#e6f7ff" shape=parallelogram]
+		frontend_key [label="Frontend Step" color="#0099e6" fillcolor="#d1f0ff" shape=box]
+		backend_key [label="Backend Step" color="#00994d" fillcolor="#e6ffe6" shape=box]
+		ai_core_key [label="AI Core Step" color="#ff6600" fillcolor="#fff0e6" shape=box]
+		decision_key [label="Decision Point" color="#e6b800" fillcolor="#fffacd" height=1.2 shape=diamond width=2.5]
+		data_key [label="Data Store" color="#8000ff" fillcolor="#f2e6ff" shape=cylinder]
+		output_key [label="Final Output" color="#155724" fillcolor="#d4edda" shape=ellipse]
+		user_action_key -> frontend_key [style=invis]
+		frontend_key -> backend_key [style=invis]
+		backend_key -> ai_core_key [style=invis]
+		ai_core_key -> decision_key [style=invis]
+		decision_key -> data_key [style=invis]
+		data_key -> output_key [style=invis]
+	}
+	start [label="User Initiates Action" fillcolor="#cce5ff" shape=oval]
+	subgraph cluster_quick_search {
+		bgcolor="#f5fcff" color="#e6f7ff" label="Flow: Quick Search (ChatService)" style=filled
+		fe_chat_input [label="User enters query in Chat UI" color="#007acc" fillcolor="#e6f7ff" shape=parallelogram]
+		fe_api_call [label="Next.js API Route (/api/chat) sends request" color="#0099e6" fillcolor="#d1f0ff" shape=box]
+		be_gateway [label="FastAPI Gateway receives request
+Validates JWT" color="#00994d" fillcolor="#e6ffe6" shape=box]
+		be_route_to_chat_service [label="Route to ChatService LangGraph" color="#00994d" fillcolor="#e6ffe6" shape=box]
+		ai_check_portfolio [label="Check if query needs portfolio data" color="#e6b800" fillcolor="#fffacd" height=1.2 shape=diamond width=2.5]
+		ai_get_portfolio [label="Tool: Get Portfolio Data" color="#ff6600" fillcolor="#fff0e6" shape=box]
+		db_portfolio [label="Query Portfolio DB (Postgres)" color="#8000ff" fillcolor="#f2e6ff" shape=cylinder]
+		ai_check_kb [label="Check if query needs Knowledge Base (RAG)" color="#e6b800" fillcolor="#fffacd" height=1.2 shape=diamond width=2.5]
+		ai_search_kb [label="Tool: Search KB" color="#ff6600" fillcolor="#fff0e6" shape=box]
+		db_bigquery [label="Vector Search (BigQuery)" color="#8000ff" fillcolor="#f2e6ff" shape=cylinder]
+		ai_check_python [label="Check if query needs Python code" color="#e6b800" fillcolor="#fffacd" height=1.2 shape=diamond width=2.5]
+		ai_python_subflow [label="Generate & Execute Python Code" color="#ff6600" fillcolor="#fff0e6" shape=box]
+		ai_check_web [label="Check if query needs Web Search" color="#e6b800" fillcolor="#fffacd" height=1.2 shape=diamond width=2.5]
+		ai_web_search [label="Tool: Perform Web Search" color="#ff6600" fillcolor="#fff0e6" shape=box]
+		ai_call_model [label="Invoke LLM (Gemini) with context" color="#ff6600" fillcolor="#fff0e6" shape=box]
+		ai_check_tool_use [label="Does response require a tool?" color="#e6b800" fillcolor="#fffacd" height=1.2 shape=diamond width=2.5]
+		ai_tool_node [label="Execute Financial/Basic Tools
+(yfinance, YouTube, etc.)" color="#ff6600" fillcolor="#fff0e6" shape=box]
+		be_stream_response [label="FastAPI streams response back" color="#00994d" fillcolor="#e6ffe6" shape=box]
+		fe_display_response [label="Chat UI displays streaming tokens" color="#155724" fillcolor="#d4edda" shape=ellipse]
+	}
+	subgraph cluster_deep_search {
+		bgcolor="#fffaf0" color="#fff5e6" label="Flow: Deep Search (DeepSearchService)" style=filled
+		fe_deep_search_input [label="User enables 'Deep Research' & submits topic" color="#007acc" fillcolor="#e6f7ff" shape=parallelogram]
+		be_route_to_deep_search [label="Route to DeepSearchService LangGraph" color="#00994d" fillcolor="#e6ffe6" shape=box]
+		ai_plan_report [label="1. Plan Report
+(Initial Web Search)" color="#ff6600" fillcolor="#fff0e6" shape=box]
+		ai_dispatch_sections [label="2. Dispatch Sections for Parallel Research" color="#ff6600" fillcolor="#fff0e6" shape=box]
+		ai_research_loop [label="3. Research Loop (per section)
+(Query -> Search -> Write -> Grade)" color="#ff6600" fillcolor="#fff0e6" shape=box]
+		ai_compile_report [label="4. Compile Final Report" color="#ff6600" fillcolor="#fff0e6" shape=box]
+		be_stream_report [label="FastAPI streams final report" color="#00994d" fillcolor="#e6ffe6" shape=box]
+		fe_display_report [label="Chat UI displays final report" color="#155724" fillcolor="#d4edda" shape=ellipse]
+	}
+	start -> fe_chat_input [label="Standard Chat"]
+	start -> fe_deep_search_input [label="Report Generation"]
+	fe_chat_input -> fe_api_call
+	fe_api_call -> be_gateway
+	be_gateway -> be_route_to_chat_service
+	be_route_to_chat_service -> ai_check_portfolio
+	ai_check_portfolio -> ai_get_portfolio [xlabel=Yes]
+	ai_get_portfolio -> db_portfolio
+	db_portfolio -> ai_check_kb
+	ai_check_portfolio -> ai_check_kb [xlabel=No]
+	ai_check_kb -> ai_search_kb [xlabel=Yes]
+	ai_search_kb -> db_bigquery
+	db_bigquery -> ai_check_python
+	ai_check_kb -> ai_check_python [xlabel=No]
+	ai_check_python -> ai_python_subflow [xlabel=Yes]
+	ai_python_subflow -> ai_check_web
+	ai_check_python -> ai_check_web [xlabel=No]
+	ai_check_web -> ai_web_search [xlabel=Yes]
+	ai_web_search -> ai_call_model
+	ai_check_web -> ai_call_model [xlabel=No]
+	ai_call_model -> ai_check_tool_use
+	ai_check_tool_use -> ai_tool_node [xlabel=Yes]
+	ai_tool_node -> ai_call_model [xlabel="Return Tool Result"]
+	ai_check_tool_use -> be_stream_response [xlabel="No (Final Answer)"]
+	be_stream_response -> fe_display_response
+	fe_deep_search_input -> fe_api_call
+	be_gateway -> be_route_to_deep_search
+	be_route_to_deep_search -> ai_plan_report
+	ai_plan_report -> ai_dispatch_sections
+	ai_dispatch_sections -> ai_research_loop
+	ai_research_loop -> ai_compile_report [xlabel="All sections complete"]
+	ai_compile_report -> be_stream_report
+	be_stream_report -> fe_display_report
+}
