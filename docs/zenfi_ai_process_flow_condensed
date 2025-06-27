@@ -1,0 +1,38 @@
+// Zenfi AI Condensed Process Flow
+digraph {
+	graph [bgcolor="#ffffff" fontname="Helvetica, Arial, sans-serif" fontsize=20 label="Zenfi AI - High-Level Process Flow" labelloc=t rankdir=TB splines=spline]
+	node [fontname="Helvetica, Arial, sans-serif" fontsize=10 shape=box style="filled,rounded"]
+	edge [color="#333333" fontname="Helvetica, Arial, sans-serif" fontsize=9]
+	start [label="User Submits Query
+(via Frontend)" color="#007acc" fillcolor="#e6f7ff" shape=oval]
+	be_gateway [label="FastAPI Gateway
+(Auth & Routing)" color="#00994d" fillcolor="#e6ffe6" shape=box]
+	decision_deep_search [label="Deep Research
+Enabled?" color="#e6b800" fillcolor="#fffacd" height=1 shape=diamond width=2]
+	subgraph cluster_quick_search {
+		bgcolor="#f5fcff" color="#e6f7ff" label="Quick Search Flow" style=filled
+		ai_process_query [label="1. Process & Enrich Query
+(Check KB, Portfolio, Web)" color="#ff6600" fillcolor="#fff0e6" shape=Mdiamond]
+		ai_tool_loop [label="2. Generate Response
+(LLM + Tools Loop)" color="#ff6600" fillcolor="#fff0e6" shape=Mdiamond]
+		qs_output [label="Stream Chat Response" color="#155724" fillcolor="#d4edda" shape=ellipse]
+	}
+	subgraph cluster_deep_search {
+		bgcolor="#fffaf0" color="#fff5e6" label="Deep Search Flow" style=filled
+		ai_plan_report [label="1. Plan & Research Report Sections" color="#ff6600" fillcolor="#fff0e6" shape=Mdiamond]
+		ai_compile_report [label="2. Compile Final Report" color="#ff6600" fillcolor="#fff0e6" shape=Mdiamond]
+		ds_output [label="Return Full Report" color="#155724" fillcolor="#d4edda" shape=ellipse]
+	}
+	data_stores [label="Data Stores
+(Postgres, BigQuery, Redis)" color="#8000ff" fillcolor="#f2e6ff" shape=cylinder]
+	start -> be_gateway
+	be_gateway -> decision_deep_search
+	decision_deep_search -> ai_process_query [xlabel=No]
+	decision_deep_search -> ai_plan_report [xlabel=Yes]
+	ai_process_query -> data_stores [label="Fetch Context"]
+	data_stores -> ai_tool_loop
+	ai_process_query -> ai_tool_loop
+	ai_tool_loop -> qs_output
+	ai_plan_report -> ai_compile_report
+	ai_compile_report -> ds_output
+}
