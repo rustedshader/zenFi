@@ -4,6 +4,16 @@ import operator
 from langgraph.graph.message import add_messages
 
 
+class SearchQuery(BaseModel):
+    search_query: Optional[str] = Field(None, description="Query for web search.")
+
+
+class Queries(BaseModel):
+    queries: List[SearchQuery] = Field(
+        description="List of search queries.",
+    )
+
+
 # Updated AppState with 'code' field
 class AppState(TypedDict):
     messages: Annotated[list, add_messages]
@@ -11,7 +21,7 @@ class AppState(TypedDict):
     needs_knowledge_base: Optional[bool]
     needs_python_code: Optional[bool]
     needs_web_search: Optional[bool]
-    search_queries: list[str]
+    search_queries: list[SearchQuery]
     search_sufficient: Optional[bool]
     summary: Optional[str]
     python_code_context: Optional[str]

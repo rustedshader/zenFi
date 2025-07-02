@@ -61,6 +61,7 @@ from app.chat_provider.models.chat_models import (
     PythonCode,
     PythonCodeContext,
     PythonSearchNeed,
+    Queries,
 )
 from app.chat_provider.tools.rag_tools import (
     get_db,
@@ -69,7 +70,7 @@ from app.api.api_models import ChatSession, KnowledgeBase, Portfolio
 from app.chat_provider.service.knowledge_base.knowledege_base import search_enhanced
 from sqlalchemy.orm import selectinload
 
-from app.chat_provider.service.deepsearch_utils import (
+from app.chat_provider.utils.search_utils import (
     get_search_params,
     select_and_execute_search,
 )
@@ -290,20 +291,20 @@ class ChatService:
         return {"needs_web_search": False}
 
     async def generate_multiple_queries(self, state: AppState):
-        number_of_search_queries = 3
+        number_of_search_queries = 5
         last_message = state["messages"][-1]
         todays_date = datetime.datetime.now().strftime("%Y-%m-%d")
         if isinstance(last_message, HumanMessage):
             user_input = last_message.content
             query_prompt = f"Todays Date is: {todays_date}. Based on the following user input, generate {number_of_search_queries} distinct search queries to find comprehensive information: {user_input}"
-            query_response = await self.model.ainvoke(
+            structured_llm = self.model.with_structured_output(Queries)
+            queries = await structured_llm.ainvoke(
                 [
                     SystemMessage(content="You are a helpful financial assistant."),
                     HumanMessage(content=query_prompt),
                 ]
             )
-            queries = query_response.content.split("\n")
-            return {"search_queries": queries}
+            return {"search_queries": queries.queries}
         return {}
 
     async def search_web(self, state: AppState, config: RunnableConfig):
@@ -313,7 +314,11 @@ class ChatService:
         search_api_config = config["configurable"].get("search_api_config", {})
         params_to_pass = get_search_params(search_api, search_api_config)
 
-        query_list = [query for query in search_queries if query is not None]
+        query_list = [
+            query.search_query
+            for query in search_queries
+            if query.search_query is not None
+        ]
 
         source_str = await select_and_execute_search(
             search_api, query_list, params_to_pass
@@ -436,7 +441,6 @@ class ChatService:
                 )
 
         if additional_context:
-            print(additional_context)
             context_message = SystemMessage(
                 content="Additional Context for Response:\n\n"
                 + "\n\n".join(additional_context)
@@ -760,15 +764,12 @@ class ChatService:
                 "max_search_depth": 1,
             }
         )
-        print(config)
         input_state = {"messages": [HumanMessage(content=user_input)]}
         yielded_contents = set()
         async for state_update_values in self.graph.astream(
             input_state, config, stream_mode="values"
         ):
             last_message = state_update_values["messages"][-1]
-            if "search_queries" in state_update_values:
-                print("Search Query", state_update_values["search_queries"])
             if isinstance(last_message, AIMessage):
                 content = last_message.content
                 if isinstance(content, list):
@@ -788,9 +789,7 @@ if __name__ == "__main__":
     import asyncio
 
     GEMINI_API_KEY = os.environ.get("GOOGLE_GEMINI_API_KEY", "")
-    model = ChatGoogleGenerativeAI(
-        model="gemini-2.0-flash-lite", api_key=GEMINI_API_KEY
-    )
+    model = ChatGoogleGenerativeAI(model="gemini-2.5-flash	", api_key=GEMINI_API_KEY)
 
     async def main():
         DB_URI = "postgresql://postgres:postgres@localhost:5434/postgres"

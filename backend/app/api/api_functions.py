@@ -108,13 +108,13 @@ safety_settings = {
 
 
 deepresearch_llm = ChatGoogleGenerativeAI(
-    model="gemini-2.5-pro-preview-03-25",
+    model="gemini-2.5-pro",
     api_key=GEMINI_API_KEY,
     safety_settings=safety_settings,
 )
 
 quicksearch_llm = ChatGoogleGenerativeAI(
-    model="gemini-2.0-flash-lite",
+    model="gemini-2.5-flash",
     api_key=GEMINI_API_KEY,
     safety_settings=safety_settings,
 )
