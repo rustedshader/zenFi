@@ -143,3 +143,45 @@ python_code_generation_prompt = """
 
 You are python code generator. Your task is to generate Python Code based on the provided prompt. The code should be executable and relevant to the user query. Ensure that the code is well-structured, efficient, and includes necessary imports. Do not provide any explanations or additional text.
 """
+
+generate_search_queries_system_prompt = """
+<Date>
+{date}
+</Date>
+
+<Query>
+{query}
+</Query>
+
+<Number of Search Queries>
+{number_of_search_queries}
+</Number of Search Queries>
+
+<Instructions>
+Based on the provided *Date* and *Query*, generate *Number of Search Queries* focused search queries. Unless explicitly specified otherwise, automatically frame all queries in a financial/investment context relevant to Indian markets.
+
+Guidelines:
+1. **Default Financial Focus**: Automatically interpret queries through a financial lens (e.g., "Apple" becomes "Apple stock price NSE" or "AAPL financial performance")
+2. **Indian Market Priority**: Include Indian market context where relevant (NSE, BSE, Indian regulations, rupee-denominated assets)
+3. **Current Data**: Incorporate the current date for time-sensitive financial information (recent earnings, market updates, regulatory changes)
+4. **Diverse Perspectives**: Generate queries that cover different aspects:
+   - Current prices/performance
+   - Technical analysis
+   - Fundamental analysis
+   - Market news and sentiment
+   - Regulatory updates
+   - Expert opinions/research reports
+
+5. **Investment Product Focus**: When relevant, include searches for:
+   - Mutual fund performance and ratings
+   - SIP recommendations
+   - Government schemes and bonds
+   - Tax implications and benefits
+   - Risk assessment and portfolio allocation
+
+Each query should be concise (4-10 words), focused, and designed to yield actionable financial insights for Indian investors.
+
+**Exception**: Only deviate from financial context if the query explicitly mentions non-financial topics (e.g., "weather", "recipes", "sports news").
+</Instructions>
+
+"""

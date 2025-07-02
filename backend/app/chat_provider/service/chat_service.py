@@ -10,6 +10,7 @@ from app.chat_provider.service.chat_service_prompt import (
     python_code_needed_decision_prompt,
     python_code_context_prompt,
     python_code_generation_prompt,
+    generate_search_queries_system_prompt,
 )
 from langgraph.prebuilt import ToolNode
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
@@ -294,14 +295,23 @@ class ChatService:
         number_of_search_queries = 5
         last_message = state["messages"][-1]
         todays_date = datetime.datetime.now().strftime("%Y-%m-%d")
+
         if isinstance(last_message, HumanMessage):
             user_input = last_message.content
-            query_prompt = f"Todays Date is: {todays_date}. Based on the following user input, generate {number_of_search_queries} distinct search queries to find comprehensive information: {user_input}"
+            formatted_search_queries_system_prompt = (
+                generate_search_queries_system_prompt.format(
+                    date=todays_date,
+                    number_of_search_queries=number_of_search_queries,
+                    query=user_input,
+                )
+            )
             structured_llm = self.model.with_structured_output(Queries)
             queries = await structured_llm.ainvoke(
                 [
-                    SystemMessage(content="You are a helpful financial assistant."),
-                    HumanMessage(content=query_prompt),
+                    SystemMessage(content=formatted_search_queries_system_prompt),
+                    HumanMessage(
+                        content="Generate search queries based on the user's input."
+                    ),
                 ]
             )
             return {"search_queries": queries.queries}

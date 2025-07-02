@@ -281,6 +281,9 @@ async def google_search_async(
 
                                 # Process search results
                                 for item in data.get("items", []):
+                                    print(
+                                        f"Title: {item.get('title')} Link: {item.get('link')}"
+                                    )
                                     result = {
                                         "title": item.get("title", ""),
                                         "url": item.get("link", ""),
